@@ -10,6 +10,7 @@ import { DonorDashboard } from './components/dashboard/DonorDashboard'
 import { VolunteerDashboard } from './components/dashboard/VolunteerDashboard'
 import { DonateNowForm } from './components/donor/DonateNowForm'
 import { PickupTracker } from './components/tracking/PickupTracker'
+import { NotFound } from './components/common/NotFound'
 import {
   PackageCheck,
   HeartHandshake,
@@ -124,7 +125,12 @@ function AppContent() {
     )
   }
 
-  // 7. Landing Page View (Preserved completely)
+  // 7. 404 Not Found for any unrecognized paths
+  if (currentPath !== '/' && currentPath !== '') {
+    return <NotFound onHomeClick={() => navigate('/')} />
+  }
+
+  // 8. Landing Page View (Preserved completely)
   return (
     <div className="min-h-screen flex flex-col bg-white text-neutral-800">
       {/* 1. Compact Header */}
