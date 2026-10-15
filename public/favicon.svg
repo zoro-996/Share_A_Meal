@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="8" fill="#E8F5E9"/>
+  <!-- Bowl -->
+  <path d="M6 15c0 5.523 4.477 10 10 10s10-4.477 10-10H6z" fill="#2E7D32"/>
+  <!-- Steam Heart -->
+  <path d="M16 12.5c-.3 0-.6-.1-.8-.3-.6-.5-1.7-1.5-1.7-2.7 0-1 .8-1.8 1.8-1.8.6 0 1.2.3 1.5.8.3-.5.9-.8 1.5-.8 1 0 1.8.8 1.8 1.8 0 1.2-1.1 2.2-1.7 2.7-.2.2-.5.3-.9.3z" fill="#E65100"/>
+  <!-- Gentle rim line -->
+  <rect x="5" y="14" width="22" height="2" rx="1" fill="#1B5E20"/>
+</svg>
