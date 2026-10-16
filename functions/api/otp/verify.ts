@@ -86,7 +86,13 @@ export const onRequestPost: PagesFunction<{
 
     if (data.status === 'approved') {
       const timestamp = Date.now()
-      const secret = context.env.OTP_SECRET || 'share-a-meal-otp-signing-secret-key-2026'
+      const secret = context.env.OTP_SECRET
+      if (!secret) {
+        return new Response(JSON.stringify({ success: false, status: 'failed', error: 'Phone verification is not available.' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       // Generate WebCrypto HMAC signature
       const encoder = new TextEncoder()
       const keyData = encoder.encode(secret)

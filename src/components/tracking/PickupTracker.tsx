@@ -10,6 +10,8 @@ import {
   AlertCircle,
   Navigation,
   RefreshCw,
+  Route,
+  Timer,
 } from 'lucide-react'
 import { useNavigation } from '../../context/useNavigation'
 import {
@@ -37,6 +39,17 @@ const STATUS_STEPS: Array<{ id: DonationStatus; label: string; desc: string }> =
   { id: 'collected', label: 'Collected', desc: 'Handover OTP verified' },
   { id: 'completed', label: 'Completed', desc: 'Delivered to beneficiaries' },
 ]
+
+const distanceInKm = (from: { latitude: number; longitude: number }, to: { latitude: number; longitude: number }) => {
+  const radiusKm = 6371
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const latitudeDelta = toRadians(to.latitude - from.latitude)
+  const longitudeDelta = toRadians(to.longitude - from.longitude)
+  const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(toRadians(from.latitude)) * Math.cos(toRadians(to.latitude)) * Math.sin(longitudeDelta / 2) ** 2
+  return radiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+const formatArrival = (minutes: number) => minutes <= 1 ? 'Arriving now' : `Arriving in ${minutes} min`
 
 export const PickupTracker: React.FC<PickupTrackerProps> = ({
   donationId,
@@ -68,6 +81,7 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [showOtpInputModal, setShowOtpInputModal] = useState(false)
+  const [clockNow, setClockNow] = useState(() => Date.now())
 
   // Map references
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -97,6 +111,14 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
     const timer = setInterval(loadDonation, 4000)
     return () => clearInterval(timer)
   }, [loadDonation])
+
+  // The donor ETA is a local, rough travel estimate. It begins only when the
+  // volunteer marks the pickup En Route and does not alter persisted pickup data.
+  useEffect(() => {
+    if (donation?.status !== 'en_route') return
+    const interval = window.setInterval(() => setClockNow(Date.now()), 30_000)
+    return () => window.clearInterval(interval)
+  }, [donation?.status])
 
   // Map setup and update
   useEffect(() => {
@@ -369,6 +391,19 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
   }
 
   const currentStepIdx = getCurrentStepIndex()
+  const enRouteTimestamp = donation?.claim?.statusHistory.find((entry) => entry.status === 'en_route')?.timestamp
+  const volunteerCoordinates = donation?.claim?.volunteerCoordinates
+  const pickupCoordinates = typeof donation?.collectionAddress.latitude === 'number' && typeof donation?.collectionAddress.longitude === 'number'
+    ? { latitude: donation.collectionAddress.latitude, longitude: donation.collectionAddress.longitude }
+    : null
+  const estimatedDistanceKm = volunteerCoordinates && pickupCoordinates
+    ? distanceInKm(volunteerCoordinates, pickupCoordinates)
+    : null
+  const initialEtaMinutes = estimatedDistanceKm === null
+    ? null
+    : Math.max(3, Math.ceil((estimatedDistanceKm / 18) * 60) + 2)
+  const elapsedMinutes = enRouteTimestamp ? Math.floor((clockNow - new Date(enRouteTimestamp).getTime()) / 60_000) : 0
+  const minutesRemaining = initialEtaMinutes === null ? null : Math.max(0, initialEtaMinutes - Math.max(0, elapsedMinutes))
 
   if (loading) {
     return (
@@ -502,8 +537,8 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
           </div>
         </div>
 
-        {/* 3. Interactive Leaflet Live Map */}
-        <div className="bg-white rounded-2xl border border-[#E6EAE7] shadow-2xs overflow-hidden">
+        {/* 3. The map remains available to the volunteer. Donors see a simple arrival estimate instead. */}
+        {activeRole === 'volunteer' && <div className="bg-white rounded-2xl border border-[#E6EAE7] shadow-2xs overflow-hidden">
           {/* Map Status Header */}
           <div className="p-3.5 bg-[#FAFAFA] border-b border-[#E6EAE7] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
@@ -544,7 +579,58 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
           <div className="h-72 sm:h-96 w-full relative">
             <div ref={mapContainerRef} className="w-full h-full" />
           </div>
-        </div>
+        </div>}
+
+        {activeRole === 'donor' && (
+          <section className="overflow-hidden rounded-2xl border border-[#C8E6C9] bg-white shadow-2xs">
+            <div className="flex flex-col gap-4 bg-gradient-to-r from-[#E8F5E9] via-[#F7FCF7] to-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className="flex items-start gap-3.5">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${donation.status === 'en_route' ? 'bg-[#1B5E20] text-white shadow-sm' : donation.status === 'arrived' ? 'bg-[#FFF0DB] text-[#9A3412]' : 'bg-white text-[#1B5E20] border border-[#C8E6C9]'}`}>
+                  {donation.status === 'en_route' ? <Bike className="h-6 w-6" /> : <MapPin className="h-6 w-6" />}
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#1B5E20]">Volunteer arrival update</p>
+                  <h2 className="mt-1 font-heading text-xl font-extrabold text-[#29352F]">
+                    {donation.status === 'en_route'
+                      ? minutesRemaining === null
+                        ? 'Volunteer is on the way'
+                        : formatArrival(minutesRemaining)
+                      : donation.status === 'arrived'
+                      ? 'Your volunteer has arrived'
+                      : donation.status === 'collected' || donation.status === 'completed'
+                      ? 'Pickup is complete'
+                      : 'Volunteer assigned — waiting to start'}
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-[#536058]">
+                    {donation.status === 'en_route'
+                      ? `This is a rough local travel estimate for ${donation.claim?.volunteerName || 'your volunteer'}, not live navigation.`
+                      : donation.status === 'arrived'
+                      ? 'Please meet the volunteer and share the handover OTP after the food is inspected.'
+                      : 'The estimated arrival countdown starts when the volunteer begins the journey.'}
+                  </p>
+                </div>
+              </div>
+
+              {donation.status === 'en_route' && minutesRemaining !== null && (
+                <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-[#C8E6C9] bg-white px-4 py-3 text-[#1B5E20] shadow-2xs">
+                  <Timer className="h-5 w-5" />
+                  <div><p className="text-[10px] font-bold uppercase tracking-wider">Estimated arrival</p><p className="font-heading text-xl font-extrabold">{minutesRemaining <= 1 ? 'Now' : `${minutesRemaining} min`}</p></div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5">
+              <div className="flex items-center gap-3 rounded-xl border border-[#E6EAE7] bg-[#FAFAFA] p-3.5">
+                <Route className="h-5 w-5 shrink-0 text-[#C25E00]" />
+                <div><p className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F]">Approximate distance</p><p className="mt-0.5 text-sm font-bold text-[#29352F]">{estimatedDistanceKm === null ? 'Calculating when journey begins' : `${estimatedDistanceKm.toFixed(1)} km away`}</p></div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-[#E6EAE7] bg-[#FAFAFA] p-3.5">
+                <CheckCircle2 className={`h-5 w-5 shrink-0 ${donation.status === 'arrived' ? 'text-[#1B5E20]' : 'text-[#6B756F]'}`} />
+                <div><p className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F]">Pickup status</p><p className="mt-0.5 text-sm font-bold capitalize text-[#29352F]">{donation.status.replace('_', ' ')}</p></div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* 4. Role-Specific Action Panels */}
 

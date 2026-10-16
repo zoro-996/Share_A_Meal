@@ -8,14 +8,23 @@ import type {
   DonorUserProfile,
   VolunteerUserProfile,
 } from '../types/registration.ts'
+import { supabase } from './supabaseClient'
 
 export type { DonorUserProfile, VolunteerUserProfile }
+
+async function apiHeaders(): Promise<HeadersInit> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token
+    ? { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
+    : { 'Content-Type': 'application/json' }
+}
 
 const DEFAULT_DONOR_PROFILE: DonorUserProfile = {
   id: 'donor_taj_bengaluru',
   name: 'Ramesh Verma',
   phone: '9876543210',
   donorType: 'restaurant',
+  isVerified: true,
   collectionAddress: {
     addressLine1: '42, 100 Feet Road, Near Sony Signal',
     addressLine2: '2nd Floor, Commercial Block',
@@ -61,6 +70,16 @@ export function setActiveRole(role: 'donor' | 'volunteer' | null): void {
   }
 }
 
+export function clearCurrentSession(): void {
+  setActiveRole(null)
+  try {
+    localStorage.removeItem('shareameal_donor_profile')
+    localStorage.removeItem('shareameal_volunteer_profile')
+  } catch {
+    // ignore
+  }
+}
+
 // Local Storage Session Helpers
 export function getCurrentDonor(): DonorUserProfile {
   try {
@@ -101,7 +120,7 @@ export function saveCurrentVolunteer(profile: VolunteerUserProfile) {
 // Profile API Methods with local cache sync
 export async function fetchDonorProfile(id?: string): Promise<DonorUserProfile> {
   try {
-    const res = await fetch(`/api/profile/donor?id=${encodeURIComponent(id || getCurrentDonor().id)}`)
+    const res = await fetch(`/api/profile/donor?id=${encodeURIComponent(id || getCurrentDonor().id)}`, { headers: await apiHeaders() })
     if (res.ok) {
       const data = await res.json()
       if (data.profile) {
@@ -120,7 +139,7 @@ export async function updateDonorProfile(profile: DonorUserProfile): Promise<Don
   try {
     const res = await fetch('/api/profile/donor', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await apiHeaders(),
       body: JSON.stringify(profile),
     })
     if (res.ok) {
@@ -138,7 +157,7 @@ export async function updateDonorProfile(profile: DonorUserProfile): Promise<Don
 
 export async function fetchVolunteerProfile(id?: string): Promise<VolunteerUserProfile> {
   try {
-    const res = await fetch(`/api/profile/volunteer?id=${encodeURIComponent(id || getCurrentVolunteer().id)}`)
+    const res = await fetch(`/api/profile/volunteer?id=${encodeURIComponent(id || getCurrentVolunteer().id)}`, { headers: await apiHeaders() })
     if (res.ok) {
       const data = await res.json()
       if (data.profile) {
@@ -157,7 +176,7 @@ export async function updateVolunteerProfile(profile: VolunteerUserProfile): Pro
   try {
     const res = await fetch('/api/profile/volunteer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await apiHeaders(),
       body: JSON.stringify(profile),
     })
     if (res.ok) {
@@ -189,7 +208,7 @@ export async function sendVolunteerLocation(
   }
   const res = await fetch(`/api/donations/${encodeURIComponent(donationId)}/volunteer-location`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify({ volunteerId, coordinates: coords }),
   })
   if (!res.ok) {
@@ -211,7 +230,7 @@ export async function fetchDonations(params?: {
   if (params?.status) query.set('status', params.status)
   if (params?.locality) query.set('locality', params.locality)
 
-  const res = await fetch(`/api/donations?${query.toString()}`)
+  const res = await fetch(`/api/donations?${query.toString()}`, { headers: await apiHeaders() })
   if (!res.ok) {
     throw new Error('Failed to fetch donations.')
   }
@@ -228,7 +247,7 @@ export async function fetchDonationById(
   if (role) query.set('role', role)
   if (userId) query.set('userId', userId)
 
-  const res = await fetch(`/api/donations/${encodeURIComponent(id)}?${query.toString()}`)
+  const res = await fetch(`/api/donations/${encodeURIComponent(id)}?${query.toString()}`, { headers: await apiHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.error || 'Failed to fetch donation details.')
@@ -240,7 +259,7 @@ export async function fetchDonationById(
 export async function createDonation(payload: CreateDonationPayload): Promise<Donation> {
   const res = await fetch('/api/donations/create', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify(payload),
   })
 
@@ -255,11 +274,12 @@ export async function createDonation(payload: CreateDonationPayload): Promise<Do
 
 export async function claimDonation(
   donationId: string,
-  volunteer: VolunteerUserProfile
+  volunteer: VolunteerUserProfile,
+  pickupChecklistAccepted?: boolean[]
 ): Promise<Donation> {
   const res = await fetch(`/api/donations/${encodeURIComponent(donationId)}/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify({
       volunteerId: volunteer.id,
       volunteerName: volunteer.name,
@@ -267,6 +287,7 @@ export async function claimDonation(
       volunteerVehicle: volunteer.vehicle,
       volunteerRole: volunteer.role,
       ngoName: volunteer.ngoName,
+      pickupChecklistAccepted,
     }),
   })
 
@@ -291,7 +312,7 @@ export async function updatePickupStatus(
 ): Promise<Donation> {
   const res = await fetch(`/api/donations/${encodeURIComponent(donationId)}/status`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify({
       status,
       volunteerId,
@@ -315,7 +336,7 @@ export async function verifyHandoverOtp(
 ): Promise<{ success: boolean; donation: Donation }> {
   const res = await fetch(`/api/donations/${encodeURIComponent(donationId)}/verify-handover`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify({
       code,
       volunteerId,
@@ -338,7 +359,7 @@ export async function cancelDonation(
 ): Promise<Donation> {
   const res = await fetch(`/api/donations/${encodeURIComponent(donationId)}/cancel`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await apiHeaders(),
     body: JSON.stringify({ donorId, reason }),
   })
 
@@ -359,7 +380,7 @@ export async function fetchNotifications(
   if (role) query.set('role', role)
   if (userId) query.set('userId', userId)
 
-  const res = await fetch(`/api/notifications?${query.toString()}`)
+  const res = await fetch(`/api/notifications?${query.toString()}`, { headers: await apiHeaders() })
   if (!res.ok) return []
   const data = await res.json()
   return data.notifications || []
@@ -368,6 +389,7 @@ export async function fetchNotifications(
 export async function markNotificationAsRead(id: string): Promise<boolean> {
   const res = await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, {
     method: 'POST',
+    headers: await apiHeaders(),
   })
   return res.ok
 }

@@ -4,11 +4,13 @@ import type { IdentityDocumentType, UploadedDocument } from '../../types/registr
 
 
 interface IdentityDocumentUploaderProps {
-  id: string
-  docType: IdentityDocumentType
-  onDocTypeChange: (type: IdentityDocumentType) => void
+  id?: string
+  docType?: IdentityDocumentType
+  onDocTypeChange?: (type: IdentityDocumentType) => void
   document: UploadedDocument | null
-  onDocumentChange: (doc: UploadedDocument | null) => void
+  onDocumentChange?: (doc: UploadedDocument | null) => void
+  onDocumentUploaded?: (doc: UploadedDocument) => void
+  onDocumentRemoved?: () => void
   error?: string
 }
 
@@ -17,11 +19,13 @@ const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image
 const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp']
 
 export const IdentityDocumentUploader: React.FC<IdentityDocumentUploaderProps> = ({
-  id,
-  docType,
+  id = 'identity-doc',
+  docType = 'aadhaar',
   onDocTypeChange,
   document,
   onDocumentChange,
+  onDocumentUploaded,
+  onDocumentRemoved,
   error,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -76,7 +80,8 @@ export const IdentityDocumentUploader: React.FC<IdentityDocumentUploaderProps> =
               status: 'completed',
               privateReferenceId: `doc_r2_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
             }
-            onDocumentChange(uploadedDoc)
+            onDocumentChange?.(uploadedDoc)
+            onDocumentUploaded?.(uploadedDoc)
           }, 300)
           return 90
         }
@@ -102,7 +107,8 @@ export const IdentityDocumentUploader: React.FC<IdentityDocumentUploaderProps> =
   }
 
   const handleRemove = () => {
-    onDocumentChange(null)
+    onDocumentChange?.(null)
+    onDocumentRemoved?.()
     setLocalError(null)
     setUploadProgress(0)
     if (fileInputRef.current) {
@@ -115,17 +121,17 @@ export const IdentityDocumentUploader: React.FC<IdentityDocumentUploaderProps> =
       {/* Document Type Selector */}
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-type`} className="text-sm font-semibold text-[#29352F]">
-          Identity Proof Type <span className="text-red-500">*</span>
+          Identity Proof Type
         </label>
         <select
           id={`${id}-type`}
           value={docType}
-          onChange={(e) => onDocTypeChange(e.target.value as IdentityDocumentType)}
+          onChange={(e) => onDocTypeChange?.(e.target.value as IdentityDocumentType)}
           className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10 cursor-pointer"
         >
           <option value="aadhaar">Aadhaar Card</option>
           <option value="pan">PAN Card</option>
-          <option value="other_gov_id">Other Government-Issued ID (Voter ID, Passport, Driving License)</option>
+            <option value="other_gov_id">Voter ID or another government-issued ID</option>
         </select>
       </div>
 
@@ -133,12 +139,12 @@ export const IdentityDocumentUploader: React.FC<IdentityDocumentUploaderProps> =
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold text-[#29352F]">
-            Upload Identity Proof <span className="text-red-500">*</span>
+            Upload Identity Proof
           </label>
           <span className="text-xs text-[#6B756F]">PDF, JPG, PNG (Max 5MB)</span>
         </div>
         <p className="text-xs text-[#6B756F]">
-          Upload an accepted identity document for verification.
+          Aadhaar Card, PAN Card, Voter ID, or another government-issued identity document.
         </p>
 
         <input

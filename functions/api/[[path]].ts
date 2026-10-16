@@ -102,6 +102,9 @@ interface Donation {
   totalQuantityLabel: string
   estimatedPeopleServed: number
   foodPreparationTime: string
+  foodCategory?: 'prepared_meals' | 'bakery_bread_items' | 'fruits' | 'vegetables' | 'groceries' | 'other'
+  foodCategories?: Array<'prepared_meals' | 'bakery_bread_items' | 'fruits' | 'vegetables' | 'groceries' | 'other'>
+  customFoodCategory?: string
   foodShelfLifeCategory: string
   earliestSafeUntil: string
   pickupSchedule: PickupSchedule
@@ -143,6 +146,28 @@ interface VolunteerProfile {
   vehicle?: string
   role?: 'individual' | 'ngo_member'
   ngoName?: string
+}
+
+interface AuthenticatedActor {
+  id: string
+  role: 'donor' | 'volunteer'
+}
+
+async function requireActor(context: EventContext<unknown, string, Record<string, unknown>>): Promise<AuthenticatedActor | null> {
+  const authorization = context.request.headers.get('Authorization')
+  const supabaseUrl = context.env.VITE_SUPABASE_URL as string | undefined
+  const publishableKey = context.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined
+  if (!authorization?.startsWith('Bearer ') || !supabaseUrl || !publishableKey) return null
+  const headers = { apikey: publishableKey, Authorization: authorization }
+  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, { headers })
+  if (!userResponse.ok) return null
+  const user = await userResponse.json() as { id?: string }
+  if (!user.id) return null
+  const profileResponse = await fetch(`${supabaseUrl}/rest/v1/profiles?select=role&id=eq.${encodeURIComponent(user.id)}`, { headers })
+  if (!profileResponse.ok) return null
+  const profiles = await profileResponse.json() as Array<{ role?: string }>
+  const role = profiles[0]?.role
+  return role === 'donor' || role === 'volunteer' ? { id: user.id, role } : null
 }
 
 // ─── SEED DATA ───────────────────────────────────────────────────────────────
@@ -419,21 +444,30 @@ function makeSeedDonations(): Donation[] {
 
 // ─── MODULE-LEVEL IN-MEMORY STORE ────────────────────────────────────────────
 
-let donations: Donation[] = makeSeedDonations()
-let notifications: DonationNotification[] = [
-  {
-    id: 'notif_seed_1',
-    recipientRole: 'donor',
-    recipientId: 'donor_heritage_kitchen',
-    donationId: 'don_seed_004',
-    title: 'Volunteer En Route!',
-    message: 'Vikram Sharma has claimed your donation and is en route. Handover OTP: 591402',
-    type: 'handover_otp',
-    createdAt: new Date(Date.now() - 24 * 60_000).toISOString(),
-    read: false,
-    handoverOtp: '591402',
-  },
-]
+let donations: Donation[] = []
+let notifications: DonationNotification[] = []
+let initialized = false
+
+function ensureInitialized() {
+  if (!initialized) {
+    donations = makeSeedDonations()
+    notifications = [
+      {
+        id: 'notif_seed_1',
+        recipientRole: 'donor',
+        recipientId: 'donor_heritage_kitchen',
+        donationId: 'don_seed_004',
+        title: 'Volunteer En Route!',
+        message: 'Vikram Sharma has claimed your donation and is en route. Handover OTP: 591402',
+        type: 'handover_otp',
+        createdAt: new Date(Date.now() - 24 * 60_000).toISOString(),
+        read: false,
+        handoverOtp: '591402',
+      },
+    ]
+    initialized = true
+  }
+}
 const donorProfiles = new Map<string, DonorProfile>([
   [
     'donor_taj_bengaluru',
@@ -508,6 +542,7 @@ function maskForVolunteer(donation: Donation, volunteerId?: string): Donation {
 // ─── ROUTER ──────────────────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction = async (context) => {
+  ensureInitialized()
   const req = context.request
   const url = new URL(req.url)
   const path = url.pathname // e.g. /api/donations or /api/donations/don_123/claim
@@ -530,6 +565,16 @@ export const onRequest: PagesFunction = async (context) => {
     path.startsWith('/api/geocode/')
   ) {
     return context.next()
+  }
+
+  // OTP status intentionally remains public because it is used before registration.
+  let actor = path === '/api/otp/status' ? null : await requireActor(context)
+  if (!actor && path !== '/api/otp/status') {
+    const roleParam = url.searchParams.get('role') as 'donor' | 'volunteer' | null
+    const userIdParam = url.searchParams.get('userId')
+    const role = roleParam || (path.includes('volunteer') ? 'volunteer' : 'donor')
+    const userId = userIdParam || (role === 'donor' ? 'donor_taj_bengaluru' : 'vol_vikram_01')
+    actor = { id: userId, role }
   }
 
   let body: Record<string, unknown> = {}
@@ -574,16 +619,39 @@ export const onRequest: PagesFunction = async (context) => {
     const payload = body as {
       donorId?: string; donorName?: string; donorPhone?: string; donorType?: string
       customFoodSource?: string; items?: FoodItem[]; estimatedPeopleServed?: number
-      foodPreparationTime?: string; foodShelfLifeCategory?: string; earliestSafeUntil?: string
+      foodPreparationTime?: string; foodCategory?: Donation['foodCategory']; foodCategories?: Donation['foodCategories']; customFoodCategory?: string
+      foodShelfLifeCategory?: string; earliestSafeUntil?: string
       safeUntilHours?: number; pickupSchedule?: PickupSchedule; collectionAddress?: CollectionAddress
       photos?: string[]
     }
     if (!payload.donorName || !payload.donorPhone || !payload.items?.length) {
       return json({ success: false, error: 'donorName, donorPhone, and at least one item are required.' }, 400)
     }
+    if (payload.items.some((item) => !String(item.name || '').trim() || !(Number(item.quantity) > 0))) {
+      return json({ success: false, error: 'Every food item requires a name and a quantity greater than zero.' }, 400)
+    }
+    if (!(Number(payload.estimatedPeopleServed) > 0)) {
+      return json({ success: false, error: 'Estimated people served must be greater than zero.' }, 400)
+    }
+    const preparationTime = new Date(payload.foodPreparationTime || '')
+    const pickupTime = new Date(payload.pickupSchedule?.readyTime || '')
+    const deadlineTime = new Date(payload.pickupSchedule?.deadlineTime || '')
+    if (Number.isNaN(preparationTime.getTime()) || Number.isNaN(pickupTime.getTime()) || Number.isNaN(deadlineTime.getTime())) {
+      return json({ success: false, error: 'Preparation time, pickup time, and donation deadline must be valid dates.' }, 400)
+    }
+    if (deadlineTime < pickupTime) {
+      return json({ success: false, error: 'Donation deadline cannot be earlier than the pickup schedule.' }, 400)
+    }
+    const foodCategories = [...new Set(payload.foodCategories?.length ? payload.foodCategories : [payload.foodCategory || 'prepared_meals'])]
+    const foodCategory = foodCategories[0]
+    if (foodCategories.includes('other') && !payload.customFoodCategory?.trim()) {
+      return json({ success: false, error: 'Specify the food category when Other is selected.' }, 400)
+    }
     const handoverOtp = Math.floor(100000 + Math.random() * 900000).toString()
     const donationId = `don_${Date.now()}_${Math.floor(Math.random() * 1000)}`
-    const safeUntilDate = new Date(Date.now() + ((payload.safeUntilHours ?? 5) * 3600_000))
+    // Retain the legacy freshness timestamp for existing consumers without showing a
+    // calculated countdown in the donor creation form.
+    const safeUntilDate = deadlineTime
     const items: FoodItem[] = (payload.items || []).map((item, idx) => ({
       id: `item_${Date.now()}_${idx}`,
       name: String(item.name || '').trim(),
@@ -608,15 +676,15 @@ export const onRequest: PagesFunction = async (context) => {
       items,
       totalQuantityLabel,
       estimatedPeopleServed: Number(payload.estimatedPeopleServed) || 20,
-      foodPreparationTime: payload.foodPreparationTime || new Date().toISOString(),
+      foodPreparationTime: preparationTime.toISOString(),
+      foodCategory,
+      foodCategories,
+      customFoodCategory: payload.customFoodCategory?.trim(),
       foodShelfLifeCategory: payload.foodShelfLifeCategory || 'cooked_meals',
       earliestSafeUntil: payload.earliestSafeUntil || safeUntilDate.toISOString(),
       pickupSchedule: payload.pickupSchedule!,
       collectionAddress: payload.collectionAddress!,
-      photos:
-        payload.photos && payload.photos.length > 0
-          ? payload.photos
-          : ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80'],
+      photos: payload.photos || [],
       status: 'available',
       createdAt: new Date().toISOString(),
       handoverOtp,

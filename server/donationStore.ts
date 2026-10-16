@@ -396,12 +396,37 @@ class DonationStore {
 
   // Create new food donation
   public createDonation(payload: CreateDonationPayload): Donation {
+    const preparationTime = new Date(payload.foodPreparationTime)
+    const pickupTime = new Date(payload.pickupSchedule?.readyTime)
+    const deadlineTime = new Date(payload.pickupSchedule?.deadlineTime)
+    if (!payload.items.length || payload.items.some((item) => !item.name?.trim() || !(Number(item.quantity) > 0))) {
+      throw new Error('Every food item requires a name and a quantity greater than zero.')
+    }
+    if (!(Number(payload.estimatedPeopleServed) > 0)) {
+      throw new Error('Estimated people served must be greater than zero.')
+    }
+    if (!Array.isArray(payload.foodSafetyChecklistAccepted) || payload.foodSafetyChecklistAccepted.length !== 10 || !payload.foodSafetyChecklistAccepted.every(Boolean)) {
+      throw new Error('All food safety checklist statements must be accepted before publishing.')
+    }
+    const foodCategories = [...new Set(payload.foodCategories?.length ? payload.foodCategories : [payload.foodCategory || 'prepared_meals'])]
+    const foodCategory = foodCategories[0]
+    if (foodCategories.includes('other') && !payload.customFoodCategory?.trim()) {
+      throw new Error('A description is required when Other is selected as the food category.')
+    }
+    if (Number.isNaN(preparationTime.getTime()) || Number.isNaN(pickupTime.getTime()) || Number.isNaN(deadlineTime.getTime())) {
+      throw new Error('Preparation time, pickup time, and donation deadline must be valid dates.')
+    }
+    if (deadlineTime < pickupTime) {
+      throw new Error('Donation deadline cannot be earlier than the pickup schedule.')
+    }
+
     // Generate secure 6-digit handover OTP
     const handoverOtp = Math.floor(100000 + Math.random() * 900000).toString()
     const donationId = `don_${Date.now()}_${Math.floor(Math.random() * 1000)}`
 
-    // Calculate earliest safe until time
-    const safeUntilDate = new Date(Date.now() + (payload.safeUntilHours || 5) * 60 * 60 * 1000)
+    // Compatibility field for existing listing consumers. The donor now directly controls
+    // the collection deadline instead of seeing a calculated safety countdown in this form.
+    const safeUntilDate = deadlineTime
 
     // Build food items with IDs
     const items: FoodItem[] = payload.items.map((item, idx) => ({
@@ -431,20 +456,20 @@ class DonationStore {
       items,
       totalQuantityLabel,
       estimatedPeopleServed: Number(payload.estimatedPeopleServed) || 20,
-      foodPreparationTime: payload.foodPreparationTime || new Date().toISOString(),
+      foodPreparationTime: preparationTime.toISOString(),
+      foodCategory,
+      foodCategories,
+      customFoodCategory: payload.customFoodCategory?.trim(),
       foodShelfLifeCategory: payload.foodShelfLifeCategory,
       earliestSafeUntil: safeUntilDate.toISOString(),
       pickupSchedule: payload.pickupSchedule,
       collectionAddress: payload.collectionAddress,
-      photos:
-        payload.photos && payload.photos.length > 0
-          ? payload.photos
-          : [
-              'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
-            ],
+      photos: payload.photos || [],
       status: 'available',
       createdAt: new Date().toISOString(),
       handoverOtp,
+      foodSafetyChecklistAccepted: payload.foodSafetyChecklistAccepted,
+      foodSafetyChecklistAcceptedAt: new Date().toISOString(),
     }
 
     this.donations.unshift(newDonation)
@@ -476,6 +501,7 @@ class DonationStore {
       vehicle?: string
       role?: 'individual' | 'ngo_member'
       ngoName?: string
+      pickupChecklistAccepted?: boolean[]
     }
   ): { success: boolean; donation?: Donation; error?: string } {
     const donation = this.donations.find((d) => d.id === donationId)
@@ -491,6 +517,9 @@ class DonationStore {
         error:
           'This surplus food listing is no longer available. It was claimed by another volunteer moments ago.',
       }
+    }
+    if (!Array.isArray(volunteer.pickupChecklistAccepted) || volunteer.pickupChecklistAccepted.length !== 10 || !volunteer.pickupChecklistAccepted.every(Boolean)) {
+      return { success: false, error: 'All pickup and distribution responsibilities must be accepted before claiming.' }
     }
 
     const now = new Date().toISOString()
@@ -525,6 +554,8 @@ class DonationStore {
         updatedAt: now,
       },
       estimatedArrivalMinutes: 15,
+      pickupChecklistAccepted: volunteer.pickupChecklistAccepted,
+      pickupChecklistAcceptedAt: now,
     }
 
     // Create Notification for the Donor with the Handover OTP reminder
@@ -689,6 +720,9 @@ class DonationStore {
     if (!donation) {
       return { success: false, error: 'Donation not found.' }
     }
+    if (! _donorId || donation.donorId !== _donorId) {
+      return { success: false, error: 'Unauthorized: only the donation owner may cancel.' }
+    }
 
     if (donation.status === 'collected' || donation.status === 'completed') {
       return { success: false, error: 'Cannot cancel a donation that has already been collected or completed.' }
@@ -715,9 +749,9 @@ class DonationStore {
   }
 
   // Mark notification as read
-  public markNotificationRead(id: string): boolean {
+  public markNotificationRead(id: string, recipientId?: string): boolean {
     const notif = this.notifications.find((n) => n.id === id)
-    if (notif) {
+    if (notif && (notif.recipientRole === 'all' || notif.recipientId === recipientId)) {
       notif.read = true
       return true
     }

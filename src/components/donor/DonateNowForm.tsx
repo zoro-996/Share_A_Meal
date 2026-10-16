@@ -1,1081 +1,175 @@
-import React, { useState, useEffect } from 'react'
-import {
-  ArrowLeft,
-  UtensilsCrossed,
-  Plus,
-  Trash2,
-  Clock,
-  MapPin,
-  Camera,
-  CheckCircle2,
-  AlertCircle,
-  Users,
-  ShieldCheck,
-  Calendar,
-  Sparkles,
-  Info,
-  Navigation,
-} from 'lucide-react'
+import React, { useState } from 'react'
+import { AlertCircle, ArrowLeft, Calendar, Camera, CheckCircle2, Clock, MapPin, Navigation, Plus, ShieldCheck, Trash2, Users, UtensilsCrossed } from 'lucide-react'
 import { CollectionLocationMap } from './CollectionLocationMap'
+import { AccountabilityChecklist } from '../common/AccountabilityChecklist'
 import { createDonation, getCurrentDonor } from '../../services/donationService'
 import { getDeviceCoordinates, reverseGeocodeCoordinates } from '../../services/geocodingService'
-import type { FoodItemUnit, FoodCategoryType } from '../../types/donation'
+import type { DonationFoodCategory, FoodItemUnit } from '../../types/donation'
 import type { DonorCollectionAddress } from '../../types/registration'
 
-interface DonateNowFormProps {
-  onBack: () => void
-  onSuccess: (donationId: string, handoverOtp: string) => void
-}
+interface DonateNowFormProps { onBack: () => void; onSuccess: (donationId: string, handoverOtp: string) => void }
+interface ItemRow { id: string; name: string; quantity: string; unit: FoodItemUnit }
 
-interface ItemRow {
-  id: string
-  name: string
-  quantity: string
-  unit: FoodItemUnit
-  foodType: FoodCategoryType
-  photo?: string
-}
-
-const SAMPLE_PHOTO_PRESETS = [
-  {
-    label: 'Veg Biryani & Curry',
-    url: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    label: 'Dal, Rice & Rotis',
-    url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    label: 'Bakery Loaves & Pastries',
-    url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
-  },
+const toLocalInputValue = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+const FOOD_CATEGORIES: Array<{ value: DonationFoodCategory; label: string }> = [
+  { value: 'prepared_meals', label: 'Prepared Meals' },
+  { value: 'bakery_bread_items', label: 'Bakery & Bread Items' },
+  { value: 'fruits', label: 'Fruits' },
+  { value: 'vegetables', label: 'Vegetables' },
+  { value: 'groceries', label: 'Groceries' },
+  { value: 'other', label: 'Other' },
 ]
+
+const shelfLifeCategoryFor = (categories: DonationFoodCategory[]) => {
+  const category = categories[0] || 'prepared_meals'
+  if (category === 'bakery_bread_items') return 'bakery_bread' as const
+  if (category === 'fruits' || category === 'vegetables') return 'fresh_produce' as const
+  if (category === 'groceries') return 'packaged_dry' as const
+  return 'cooked_meals' as const
+}
 
 export const DonateNowForm: React.FC<DonateNowFormProps> = ({ onBack, onSuccess }) => {
   const donorProfile = getCurrentDonor()
-
-  // 1. Food Photos State
-  const [photoUploadMode, setPhotoUploadMode] = useState<'combined' | 'per_item'>('combined')
-  const [photoUrl, setPhotoUrl] = useState<string>(SAMPLE_PHOTO_PRESETS[0].url)
-  const [customPhotoSelected, setCustomPhotoSelected] = useState<string | null>(null)
+  const initialTime = new Date()
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([])
   const [photoError, setPhotoError] = useState<string | null>(null)
-
-  // 2. Dynamic Food Items (Pre-rendered 3 initial rows as required)
-  const [foodItems, setFoodItems] = useState<ItemRow[]>([
-    { id: '1', name: '', quantity: '', unit: 'kg', foodType: 'veg' },
-    { id: '2', name: '', quantity: '', unit: 'portions', foodType: 'veg' },
-    { id: '3', name: '', quantity: '', unit: 'boxes', foodType: 'veg' },
-  ])
-
-  // 3. Estimated People Served
-  const [peopleServed, setPeopleServed] = useState<number>(30)
-
-  // 4. Food Preparation Time & Freshness Calculation
-  const [shelfCategory, setShelfCategory] = useState<
-    'cooked_meals' | 'bakery_bread' | 'fresh_produce' | 'packaged_dry'
-  >('cooked_meals')
-
-  const [currentTime, setCurrentTime] = useState(() => Date.now())
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 15000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const [prepTime, setPrepTime] = useState<string>(() =>
-    new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString().slice(0, 16)
-  )
-
-  // 5. Pickup Scheduling & Instructions
-  const [readyType, setReadyType] = useState<'immediate' | 'scheduled'>('immediate')
-  const [pickupDeadline, setPickupDeadline] = useState<string>(() =>
-    new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 16)
-  )
-  const [pickupInstructions, setPickupInstructions] = useState<string>(
-    'Please bring clean insulated containers or carry crates. Call upon reaching the gate.'
-  )
-
-  // 6. Collection Address & Draggable Map Pin
+  const [selectedAddressOption, setSelectedAddressOption] = useState<'saved' | 'new'>('saved')
+  const [foodItems, setFoodItems] = useState<ItemRow[]>([{ id: crypto.randomUUID(), name: '', quantity: '', unit: 'kg' }])
+  const [peopleServed, setPeopleServed] = useState('')
+  const [foodCategories, setFoodCategories] = useState<DonationFoodCategory[]>(['prepared_meals'])
+  const [customFoodCategory, setCustomFoodCategory] = useState('')
+  const [prepTime, setPrepTime] = useState(() => toLocalInputValue(initialTime))
+  const [pickupTime, setPickupTime] = useState(() => toLocalInputValue(initialTime))
+  const [pickupDeadline, setPickupDeadline] = useState(() => toLocalInputValue(new Date(initialTime.getTime() + 3 * 60 * 60 * 1000)))
+  const [pickupInstructions, setPickupInstructions] = useState('')
   const [addressLine1, setAddressLine1] = useState(donorProfile.collectionAddress.addressLine1)
   const [areaLocality, setAreaLocality] = useState(donorProfile.collectionAddress.areaLocality)
   const [city, setCity] = useState(donorProfile.collectionAddress.city)
   const [state, setState] = useState(donorProfile.collectionAddress.state)
   const [pincode, setPincode] = useState(donorProfile.collectionAddress.pincode)
   const [landmark, setLandmark] = useState(donorProfile.collectionAddress.landmark || '')
-  const [latitude, setLatitude] = useState<number | null>(
-    donorProfile.collectionAddress.latitude || 12.9784
-  )
-  const [longitude, setLongitude] = useState<number | null>(
-    donorProfile.collectionAddress.longitude || 77.6408
-  )
+  const [latitude, setLatitude] = useState<number | null>(donorProfile.collectionAddress.latitude ?? null)
+  const [longitude, setLongitude] = useState<number | null>(donorProfile.collectionAddress.longitude ?? null)
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
   const [locationNotice, setLocationNotice] = useState<string | null>(null)
-
-  // 7. Safety Declaration & Submission
-  const [safetyCertified, setSafetyCertified] = useState(false)
+  const [safetyChecks, setSafetyChecks] = useState<boolean[]>(() => Array(10).fill(false))
+  const updateSafetyCheck = (index: number, checked: boolean) => { setSafetyChecks((checks) => checks.map((value, itemIndex) => itemIndex === index ? checked : value)); clearError('safety') }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  // Category Shelf Life Hours mapping
-  const categoryHours: Record<string, number> = {
-    cooked_meals: 5,
-    bakery_bread: 24,
-    fresh_produce: 48,
-    packaged_dry: 168,
+  const clearError = (field: string) => { if (formErrors[field]) setFormErrors((previous) => ({ ...previous, [field]: '' })) }
+  const handleItemChange = (id: string, field: keyof Omit<ItemRow, 'id'>, value: string) => {
+    setFoodItems((previous) => previous.map((item) => item.id === id ? { ...item, [field]: value } : item)); clearError('items')
   }
-
-  const shelfLifeHours = categoryHours[shelfCategory]
-  const prepDate = new Date(prepTime)
-  const safeUntilDate = new Date(prepDate.getTime() + shelfLifeHours * 60 * 60 * 1000)
-  const remainingMinutes = Math.max(
-    0,
-    Math.round((safeUntilDate.getTime() - currentTime) / (1000 * 60))
-  )
-  const remainingHours = Math.floor(remainingMinutes / 60)
-  const remainingMins = remainingMinutes % 60
-
-  // Quick fill helper for testing
-  const handleQuickFillSample = () => {
-    setFoodItems([
-      {
-        id: '1',
-        name: 'Dum Veg Biryani with Raita',
-        quantity: '15',
-        unit: 'kg',
-        foodType: 'veg',
-        photo: SAMPLE_PHOTO_PRESETS[0].url,
-      },
-      {
-        id: '2',
-        name: 'Paneer Butter Masala',
-        quantity: '8',
-        unit: 'litres',
-        foodType: 'veg',
-        photo: SAMPLE_PHOTO_PRESETS[1].url,
-      },
-      {
-        id: '3',
-        name: 'Fresh Rumali Roti',
-        quantity: '50',
-        unit: 'portions',
-        foodType: 'veg',
-        photo: SAMPLE_PHOTO_PRESETS[2].url,
-      },
-    ])
-    setPeopleServed(45)
-    setSafetyCertified(true)
-  }
-
-  // Dynamic Item Row Management
-  const handleItemChange = (id: string, field: keyof ItemRow, value: string) => {
-    setFoodItems((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
-    )
-    if (formErrors.items) {
-      setFormErrors((prev) => ({ ...prev, items: '' }))
-    }
-  }
-
-  const addFoodItemRow = () => {
-    setFoodItems((prev) => [
-      ...prev,
-      {
-        id: String(Date.now() + Math.random()),
-        name: '',
-        quantity: '',
-        unit: 'kg',
-        foodType: 'veg',
-      },
-    ])
-  }
-
-  const removeFoodItemRow = (id: string) => {
-    if (foodItems.length <= 1) return
-    setFoodItems((prev) => prev.filter((row) => row.id !== id))
-  }
-
-  // File validation helper
-  const readFileAsDataUrl = (
-    file: File,
-    onSuccessCb: (dataUrl: string) => void,
-    onErrorCb: (msg: string) => void
-  ) => {
-    if (!file.type.startsWith('image/')) {
-      onErrorCb('Invalid file type. Please select an image (JPG, PNG, WEBP).')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      onErrorCb('Image size exceeds 5MB limit. Please choose a smaller image.')
-      return
-    }
+  const addFoodItemRow = () => setFoodItems((previous) => [...previous, { id: crypto.randomUUID(), name: '', quantity: '', unit: 'kg' }])
+  const removeFoodItemRow = (id: string) => { if (foodItems.length > 1) setFoodItems((previous) => previous.filter((item) => item.id !== id)) }
+  const readFileAsDataUrl = (file: File) => {
+    if (!file.type.startsWith('image/')) { setPhotoError('Please select an image file (JPG, PNG, or WEBP).'); return }
+    if (file.size > 5 * 1024 * 1024) { setPhotoError('Each image must be 5MB or smaller.'); return }
     const reader = new FileReader()
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        onSuccessCb(reader.result)
-      }
+      const imageData = reader.result
+      if (typeof imageData === 'string') setUploadedPhotos((previous) => [...previous, imageData])
     }
-    reader.onerror = () => onErrorCb('Failed to read selected image.')
+    reader.onerror = () => setPhotoError('The selected image could not be read. Please try again.')
     reader.readAsDataURL(file)
   }
-
-  // Combined photo upload handler
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    setPhotoError(null)
-    if (file) {
-      readFileAsDataUrl(
-        file,
-        (dataUrl) => {
-          setCustomPhotoSelected(dataUrl)
-          setPhotoUrl(dataUrl)
-        },
-        (err) => setPhotoError(err)
-      )
-    }
+  const handlePhotosUpload = (event: React.ChangeEvent<HTMLInputElement>) => { setPhotoError(null); Array.from(event.target.files || []).forEach(readFileAsDataUrl); event.target.value = '' }
+  const applySavedAddress = () => {
+    const address = donorProfile.collectionAddress
+    setAddressLine1(address.addressLine1); setAreaLocality(address.areaLocality); setCity(address.city); setState(address.state); setPincode(address.pincode); setLandmark(address.landmark || ''); setLatitude(address.latitude ?? null); setLongitude(address.longitude ?? null)
   }
-
-  // Item-specific photo upload handler
-  const handleItemPhotoUpload = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      readFileAsDataUrl(
-        file,
-        (dataUrl) => {
-          setFoodItems((prev) =>
-            prev.map((row) => (row.id === id ? { ...row, photo: dataUrl } : row))
-          )
-        },
-        (err) => alert(err)
-      )
-    }
+  const updateAddressFromCoordinates = async (nextLatitude: number, nextLongitude: number) => {
+    setLatitude(nextLatitude); setLongitude(nextLongitude)
+    const address = await reverseGeocodeCoordinates(nextLatitude, nextLongitude)
+    if (address.addressLine1) setAddressLine1(address.addressLine1)
+    if (address.areaLocality) setAreaLocality(address.areaLocality)
+    if (address.city) setCity(address.city)
+    if (address.state) setState(address.state)
+    if (address.pincode) setPincode(address.pincode)
+    if (address.landmark) setLandmark(address.landmark)
   }
-
-  // GPS Current Location Autofill
   const handleUseCurrentLocation = async () => {
-    setIsDetectingLocation(true)
-    setLocationNotice(null)
-    try {
-      const coords = await getDeviceCoordinates()
-      setLatitude(coords.latitude)
-      setLongitude(coords.longitude)
-      const res = await reverseGeocodeCoordinates(coords.latitude, coords.longitude)
-      if (res.addressLine1) setAddressLine1(res.addressLine1)
-      if (res.areaLocality) setAreaLocality(res.areaLocality)
-      if (res.city) setCity(res.city)
-      if (res.state) setState(res.state)
-      if (res.pincode) setPincode(res.pincode)
-      if (res.landmark) setLandmark(res.landmark)
-      setLocationNotice('Address updated from your device GPS!')
-    } catch (err) {
-      setLocationNotice(err instanceof Error ? err.message : 'Could not detect device GPS.')
-    } finally {
-      setIsDetectingLocation(false)
-    }
+    setIsDetectingLocation(true); setLocationNotice(null)
+    try { const coordinates = await getDeviceCoordinates(); await updateAddressFromCoordinates(coordinates.latitude, coordinates.longitude); setLocationNotice('Location and available address fields were updated from your device.') }
+    catch (error) { setLocationNotice(error instanceof Error ? error.message : 'Could not detect your current location.') }
+    finally { setIsDetectingLocation(false) }
+  }
+  const handleMapLocationChange = async (nextLatitude: number, nextLongitude: number) => { try { await updateAddressFromCoordinates(nextLatitude, nextLongitude) } catch { setLatitude(nextLatitude); setLongitude(nextLongitude) } }
+  const toggleFoodCategory = (category: DonationFoodCategory) => {
+    setFoodCategories((previous) => previous.includes(category) ? previous.filter((value) => value !== category) : [...previous, category])
+    clearError('foodCategory')
   }
 
-  // Map pin drag end handler
-  const handleMapLocationChange = async (lat: number, lng: number) => {
-    setLatitude(lat)
-    setLongitude(lng)
-    try {
-      const res = await reverseGeocodeCoordinates(lat, lng)
-      if (res.addressLine1) setAddressLine1(res.addressLine1)
-      if (res.areaLocality) setAreaLocality(res.areaLocality)
-      if (res.city) setCity(res.city)
-      if (res.state) setState(res.state)
-      if (res.pincode) setPincode(res.pincode)
-      if (res.landmark) setLandmark(res.landmark)
-    } catch {
-      // ignore
-    }
-  }
-
-  // Submission Validation & API Call
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (isSubmitting) return
-
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault(); if (isSubmitting) return
     const errors: Record<string, string> = {}
-
-    // Check items: At least one item with valid name and quantity > 0
-    const validItems = foodItems.filter(
-      (item) => item.name.trim() !== '' && Number(item.quantity) > 0
-    )
-
-    if (validItems.length === 0) {
-      errors.items = 'Please specify at least one food item with a name and quantity.'
-    }
-
-    if (!peopleServed || peopleServed < 1) {
-      errors.peopleServed = 'Please specify estimated number of people served.'
-    }
-
-    // Check collection deadline does not exceed food safe-until time
-    const deadlineDate = new Date(pickupDeadline)
-    if (deadlineDate.getTime() > safeUntilDate.getTime()) {
-      errors.deadline =
-        'Collection deadline cannot be later than the safe consumption expiry date (' +
-        safeUntilDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-        ').'
-    }
-
-    if (!addressLine1.trim() || !areaLocality.trim()) {
-      errors.address = 'Collection address line 1 and area are required.'
-    }
-
-    if (!safetyCertified) {
-      errors.safety = 'Please certify that the surplus food meets safety and hygiene guidelines.'
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      return
-    }
-
-    setIsSubmitting(true)
+    const preparationDate = new Date(prepTime); const pickupDate = new Date(pickupTime); const deadlineDate = new Date(pickupDeadline)
+    if (foodItems.some((item) => !item.name.trim() || !(Number(item.quantity) > 0))) errors.items = 'Every food item needs a name and a quantity greater than zero.'
+    if (!(Number(peopleServed) > 0)) errors.peopleServed = 'Enter the approximate number of people this donation can feed.'
+    if (!foodCategories.length) errors.foodCategory = 'Select at least one food category.'
+    if (foodCategories.includes('other') && !customFoodCategory.trim()) errors.foodCategory = 'Specify the additional food category.'
+    if (Number.isNaN(preparationDate.getTime())) errors.preparation = 'Select a valid preparation date and time.'
+    if (Number.isNaN(pickupDate.getTime())) errors.pickup = 'Select a valid pickup date and time.'
+    if (Number.isNaN(deadlineDate.getTime())) errors.deadline = 'Select a valid donation deadline.'
+    if (!Number.isNaN(pickupDate.getTime()) && !Number.isNaN(deadlineDate.getTime()) && deadlineDate < pickupDate) errors.deadline = 'Donation Deadline cannot be earlier than Pickup Date & Time.'
+    if (!addressLine1.trim() || !areaLocality.trim()) errors.address = 'Address Line 1 and Area / Locality are required.'
+    if (!safetyChecks.every(Boolean)) errors.safety = 'Please accept all food safety checklist statements.'
+    if (Object.keys(errors).length) { setFormErrors(errors); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    setIsSubmitting(true); setFormErrors({})
     try {
-      const collectionAddress: DonorCollectionAddress = {
-        addressLine1: addressLine1.trim(),
-        areaLocality: areaLocality.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        pincode: pincode.trim(),
-        landmark: landmark.trim(),
-        additionalDirections: pickupInstructions.trim(),
-        latitude,
-        longitude,
-      }
-
-      const submissionTimeIso = new Date().toISOString()
-      const itemPhotos = validItems.map((it) => it.photo).filter(Boolean) as string[]
-      const activePhotos =
-        photoUploadMode === 'per_item' && itemPhotos.length > 0
-          ? itemPhotos
-          : [photoUrl]
-
-      const newDonation = await createDonation({
-        donorId: donorProfile.id,
-        donorName: donorProfile.name,
-        donorPhone: donorProfile.phone,
-        donorType: donorProfile.donorType,
-        items: validItems.map((it) => ({
-          name: it.name.trim(),
-          quantity: Number(it.quantity),
-          unit: it.unit,
-          foodType: it.foodType,
-          photo: it.photo || photoUrl,
-          safeUntil: safeUntilDate.toISOString(),
-        })),
-        estimatedPeopleServed: peopleServed,
-        foodPreparationTime: new Date(prepTime).toISOString(),
-        foodShelfLifeCategory: shelfCategory,
-        safeUntilHours: shelfLifeHours,
-        pickupSchedule: {
-          readyType,
-          readyTime: readyType === 'immediate' ? submissionTimeIso : prepDate.toISOString(),
-          deadlineTime: new Date(pickupDeadline).toISOString(),
-          pickupInstructions: pickupInstructions.trim(),
-        },
-        collectionAddress,
-        photos: activePhotos,
+      const collectionAddress: DonorCollectionAddress = { addressLine1: addressLine1.trim(), areaLocality: areaLocality.trim(), city: city.trim(), state: state.trim(), pincode: pincode.trim(), landmark: landmark.trim(), additionalDirections: pickupInstructions.trim(), latitude, longitude }
+      const deadlineIso = deadlineDate.toISOString()
+      const donation = await createDonation({
+        donorId: donorProfile.id, donorName: donorProfile.name, donorPhone: donorProfile.phone, donorType: donorProfile.donorType,
+        items: foodItems.map((item) => ({ name: item.name.trim(), quantity: Number(item.quantity), unit: item.unit, foodType: 'veg', safeUntil: deadlineIso })),
+        estimatedPeopleServed: Number(peopleServed), foodPreparationTime: preparationDate.toISOString(), foodCategory: foodCategories[0], foodCategories,
+        customFoodCategory: foodCategories.includes('other') ? customFoodCategory.trim() : undefined, foodShelfLifeCategory: shelfLifeCategoryFor(foodCategories),
+        // Old freshness fields remain populated for existing consumers; the donor sees no calculated countdown.
+        safeUntilHours: Math.max(1, Math.ceil((deadlineDate.getTime() - preparationDate.getTime()) / 3_600_000)),
+        pickupSchedule: { readyType: 'scheduled', readyTime: pickupDate.toISOString(), deadlineTime: deadlineIso, pickupInstructions: pickupInstructions.trim() },
+        collectionAddress, photos: uploadedPhotos,
+        foodSafetyChecklistAccepted: safetyChecks,
       })
-
-      onSuccess(newDonation.id, newDonation.handoverOtp)
-    } catch (err) {
-      setFormErrors({
-        submit: err instanceof Error ? err.message : 'Failed to publish food donation.',
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+      onSuccess(donation.id, donation.handoverOtp)
+    } catch (error) { setFormErrors({ submit: error instanceof Error ? error.message : 'Failed to publish the food donation. Your entries are still available to edit.' }) }
+    finally { setIsSubmitting(false) }
   }
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#29352F] antialiased pb-20">
-      {/* Top Sticky Form Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-[#E6EAE7]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#6B756F] hover:text-[#29352F] px-3 py-1.5 rounded-lg border border-[#E6EAE7] hover:bg-neutral-50 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Cancel & Back</span>
-          </button>
+  const fieldClass = 'w-full min-h-11 px-3 py-2.5 text-sm font-normal rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] placeholder:text-[#6B756F]/70 focus:outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#E8F5E9]'
+  const labelClass = 'block mb-1.5 text-sm font-medium text-[#29352F]'
+  const sectionClass = 'bg-white p-4 sm:p-5 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4'
+  const sectionTitleClass = 'text-base font-bold text-[#29352F] flex items-center gap-2'
+  const helperClass = 'mt-1 text-sm leading-5 text-[#6B756F]'
 
-          <div className="text-center">
-            <h1 className="font-heading font-extrabold text-sm sm:text-base text-[#29352F]">
-              Donate Surplus Food
-            </h1>
-            <p className="text-[11px] text-[#6B756F] hidden sm:block">
-              Listing surplus meals for nearby volunteer collection
-            </p>
-          </div>
-
-          {/* Quick Demo Pre-Fill Button */}
-          <button
-            type="button"
-            onClick={handleQuickFillSample}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B5E20] bg-[#E8F5E9] hover:bg-[#d8eedb] border border-[#C8E6C9] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-            title="Auto-fill with sample food items for quick testing"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#2E7D32]" />
-            <span className="hidden sm:inline">1-Click</span> Sample Fill
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6">
-        {/* Error notification banner if any */}
-        {formErrors.submit && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <strong className="font-semibold block">Submission Error:</strong>
-              <span>{formErrors.submit}</span>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} noValidate className="space-y-8">
-          {/* ======================================================== */}
-          {/* SECTION 1: FOOD PHOTOS (Option A vs Option B) */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-[#1B5E20]" />
-                  1. Food Photos
-                </h2>
-                <p className="text-xs text-[#6B756F] mt-0.5">
-                  Choose how you want to upload photos: one combined photo or per-item photos.
-                </p>
-              </div>
-
-              {/* Mode Toggle: Option B (Combined) vs Option A (Per Item) */}
-              <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-xl border border-[#E6EAE7] self-start sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setPhotoUploadMode('combined')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    photoUploadMode === 'combined'
-                      ? 'bg-[#29352F] text-white shadow-2xs'
-                      : 'text-[#6B756F] hover:text-[#29352F]'
-                  }`}
-                >
-                  One Combined Photo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPhotoUploadMode('per_item')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    photoUploadMode === 'per_item'
-                      ? 'bg-[#29352F] text-white shadow-2xs'
-                      : 'text-[#6B756F] hover:text-[#29352F]'
-                  }`}
-                >
-                  Photos Per Item
-                </button>
-              </div>
-            </div>
-
-            {photoError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{photoError}</span>
-              </div>
-            )}
-
-            {photoUploadMode === 'combined' ? (
-              /* Option B: Active photo preview */
-              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
-                <div className="w-full sm:w-44 h-36 rounded-xl overflow-hidden border border-[#E6EAE7] bg-neutral-100 relative group shrink-0 shadow-2xs">
-                  <img
-                    src={photoUrl}
-                    alt="Food listing preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-medium backdrop-blur-2xs">
-                    Combined Photo
-                  </span>
-                </div>
-
-                <div className="w-full space-y-2.5">
-                  <span className="text-xs font-semibold text-[#29352F] block">
-                    Select a sample photo or upload your own (max 5MB):
-                  </span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {SAMPLE_PHOTO_PRESETS.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setPhotoUrl(preset.url)
-                          setCustomPhotoSelected(null)
-                        }}
-                        className={`p-2 rounded-xl border text-center text-xs font-medium transition-all cursor-pointer ${
-                          photoUrl === preset.url
-                            ? 'border-[#29352F] bg-[#FAFAFA] text-[#29352F] ring-1 ring-[#29352F]'
-                            : 'border-[#E6EAE7] bg-white text-[#6B756F] hover:bg-neutral-50'
-                        }`}
-                      >
-                        <span className="block truncate text-[11px]">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="pt-1">
-                    <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-dashed border-[#29352F]/40 hover:border-[#29352F] bg-white text-xs font-semibold text-[#29352F] cursor-pointer transition-colors">
-                      <Camera className="w-3.5 h-3.5 text-[#1B5E20]" />
-                      <span>Upload Combined Photo</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        className="hidden"
-                      />
-                    </label>
-                    {customPhotoSelected && (
-                      <span className="text-[11px] text-[#1B5E20] font-medium ml-2">
-                        ✓ Photo attached
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Option A: Notice */
-              <div className="p-3.5 rounded-xl bg-[#EAF3FF] border border-[#BFDBFE] text-xs text-[#1E40AF] flex items-center gap-2.5">
-                <Info className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong>Individual Photos Mode:</strong> You can upload a specific photo for each food item below in Section 2.
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 2: DYNAMIC FOOD ITEMS (Initial 3 Rows) */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                  <UtensilsCrossed className="w-4 h-4 text-[#1B5E20]" />
-                  2. Food Items & Quantities <span className="text-red-500">*</span>
-                </h2>
-                <p className="text-xs text-[#6B756F] mt-0.5">
-                  Itemize what you are donating. Every item will be clearly displayed to volunteers.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={addFoodItemRow}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#E8F5E9] hover:bg-[#d8eedb] text-[#1B5E20] text-xs font-bold border border-[#C8E6C9] transition-colors cursor-pointer shadow-2xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Item</span>
-              </button>
-            </div>
-
-            {formErrors.items && (
-              <p role="alert" className="text-xs text-red-600 font-medium">
-                {formErrors.items}
-              </p>
-            )}
-
-            <div className="space-y-3">
-              {foodItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl border border-[#E6EAE7] bg-[#FAFAFA] flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 transition-all"
-                >
-                  <span className="text-xs font-bold text-[#6B756F] w-6 shrink-0 text-center hidden sm:block">
-                    #{index + 1}
-                  </span>
-
-                  {/* Per-Item Photo Uploader if in Option A */}
-                  {photoUploadMode === 'per_item' && (
-                    <div className="w-12 h-10 rounded-lg overflow-hidden bg-neutral-200 border border-[#E6EAE7] relative shrink-0 flex items-center justify-center">
-                      {item.photo ? (
-                        <img
-                          src={item.photo}
-                          alt={item.name || 'Item'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <label className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-neutral-300 transition-colors">
-                          <Camera className="w-4 h-4 text-[#6B756F]" />
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleItemPhotoUpload(item.id, e)}
-                            className="hidden"
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Food item name */}
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                      placeholder={
-                        index === 0
-                          ? 'e.g. Veg Biryani'
-                          : index === 1
-                          ? 'e.g. Dal Tadka / Curry'
-                          : 'e.g. Roti / Bread'
-                      }
-                      className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-[#E6EAE7] bg-white text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-                    />
-                  </div>
-
-                  {/* Quantity */}
-                  <div className="w-full sm:w-24">
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                      placeholder="Qty"
-                      className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-[#E6EAE7] bg-white text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-                    />
-                  </div>
-
-                  {/* Unit */}
-                  <div className="w-full sm:w-28">
-                    <select
-                      value={item.unit}
-                      onChange={(e) =>
-                        handleItemChange(item.id, 'unit', e.target.value as FoodItemUnit)
-                      }
-                      className="w-full px-2.5 py-2 text-xs font-medium rounded-lg border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F] cursor-pointer"
-                    >
-                      <option value="kg">kg</option>
-                      <option value="portions">portions</option>
-                      <option value="litres">litres</option>
-                      <option value="boxes">boxes</option>
-                      <option value="packets">packets</option>
-                      <option value="containers">containers</option>
-                    </select>
-                  </div>
-
-                  {/* Food Type */}
-                  <div className="w-full sm:w-28">
-                    <select
-                      value={item.foodType}
-                      onChange={(e) =>
-                        handleItemChange(item.id, 'foodType', e.target.value as FoodCategoryType)
-                      }
-                      className="w-full px-2.5 py-2 text-xs font-medium rounded-lg border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F] cursor-pointer"
-                    >
-                      <option value="veg">Pure Veg</option>
-                      <option value="vegan">Vegan</option>
-                      <option value="non_veg">Non-Veg</option>
-                    </select>
-                  </div>
-
-                  {/* Delete button (only if > 1 item) */}
-                  {foodItems.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeFoodItemRow(item.id)}
-                      className="p-2 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-white transition-colors cursor-pointer self-end sm:self-center"
-                      title="Remove item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 3: ESTIMATED PEOPLE SERVED */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-[#1B5E20]" />
-                3. Estimated People Served <span className="text-red-500">*</span>
-              </h2>
-              <p className="text-xs text-[#6B756F] mt-0.5">
-                Approximate number of beneficiaries or meals this donation can provide.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {[10, 20, 35, 50, 80, 120].map((count) => (
-                <button
-                  key={count}
-                  type="button"
-                  onClick={() => setPeopleServed(count)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    peopleServed === count
-                      ? 'bg-[#29352F] text-white border-[#29352F] shadow-2xs'
-                      : 'bg-white text-[#29352F] border-[#E6EAE7] hover:bg-neutral-50'
-                  }`}
-                >
-                  ~{count} people
-                </button>
-              ))}
-
-              <div className="flex items-center gap-1.5 ml-auto">
-                <span className="text-xs text-[#6B756F]">Custom:</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={peopleServed}
-                  onChange={(e) => setPeopleServed(Number(e.target.value))}
-                  className="w-20 px-2.5 py-1.5 text-xs font-bold text-center rounded-lg border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 4: FOOD PREPARATION & FRESHNESS CALCULATION */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-[#1B5E20]" />
-                4. Preparation Time & Food Safety Freshness <span className="text-red-500">*</span>
-              </h2>
-              <p className="text-xs text-[#6B756F] mt-0.5">
-                Safe consumption deadlines are dynamically calculated based on standard hygiene standards.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Food Category (Safe Shelf Life)
-                </label>
-                <select
-                  value={shelfCategory}
-                  onChange={(e) => setShelfCategory(e.target.value as any)}
-                  className="w-full px-3 py-2.5 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F] cursor-pointer"
-                >
-                  <option value="cooked_meals">Cooked Hot Meals (Safe for 5 hours)</option>
-                  <option value="bakery_bread">Bakery & Breads (Safe for 24 hours)</option>
-                  <option value="fresh_produce">Fresh Fruits & Raw Produce (Safe for 48 hours)</option>
-                  <option value="packaged_dry">Packaged Dry Goods (Safe for 7 days)</option>
-                </select>
-              </div>
-
-              {/* Preparation Time */}
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Food Preparation Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={prepTime}
-                  onChange={(e) => setPrepTime(e.target.value)}
-                  className="w-full px-3 py-2.5 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-            </div>
-
-            {/* Dynamic Freshness Banner */}
-            <div className="p-4 rounded-xl bg-[#E8F5E9]/60 border border-[#C8E6C9] flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-[#1B5E20] shrink-0 mt-0.5" />
-              <div>
-                <div className="text-xs font-bold text-[#1B5E20] flex items-center gap-2">
-                  <span>Safe for consumption until:</span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-[#C8E6C9]">
-                    {safeUntilDate.toLocaleDateString([], { month: 'short', day: 'numeric' })},{' '}
-                    {safeUntilDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#29352F] mt-1">
-                  Approximately <strong>{remainingHours}h {remainingMins}m</strong> safe consumption window remaining. Volunteers must collect and distribute the food before this deadline.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 5: PICKUP SCHEDULING & INSTRUCTIONS */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-[#1B5E20]" />
-                5. Pickup Schedule & Volunteer Instructions <span className="text-red-500">*</span>
-              </h2>
-              <p className="text-xs text-[#6B756F] mt-0.5">
-                Set when food is ready and specify the absolute collection deadline.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Ready for Pickup
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setReadyType('immediate')}
-                    className={`py-2 px-3 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
-                      readyType === 'immediate'
-                        ? 'bg-[#29352F] text-white border-[#29352F]'
-                        : 'bg-white text-[#6B756F] border-[#E6EAE7]'
-                    }`}
-                  >
-                    Immediately
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReadyType('scheduled')}
-                    className={`py-2 px-3 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
-                      readyType === 'scheduled'
-                        ? 'bg-[#29352F] text-white border-[#29352F]'
-                        : 'bg-white text-[#6B756F] border-[#E6EAE7]'
-                    }`}
-                  >
-                    Prepared At Time
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Collection Deadline
-                </label>
-                <input
-                  type="datetime-local"
-                  value={pickupDeadline}
-                  onChange={(e) => setPickupDeadline(e.target.value)}
-                  className={`w-full px-3 py-2.5 text-xs font-medium rounded-xl border bg-white text-[#29352F] focus:outline-none ${
-                    formErrors.deadline ? 'border-red-500 ring-1 ring-red-500' : 'border-[#E6EAE7] focus:border-[#29352F]'
-                  }`}
-                />
-                {formErrors.deadline && (
-                  <p role="alert" className="text-xs text-red-600 mt-1 font-medium">
-                    {formErrors.deadline}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                Pickup Notes & Directions for Volunteer
-              </label>
-              <textarea
-                rows={2}
-                value={pickupInstructions}
-                onChange={(e) => setPickupInstructions(e.target.value)}
-                placeholder="e.g. Please enter via the rear kitchen service gate. Bring insulated bags."
-                className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-              />
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 6: COLLECTION ADDRESS & DRAGGABLE MAP */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-[#1B5E20]" />
-                  6. Food Collection Address & Map Pin <span className="text-red-500">*</span>
-                </h2>
-                <p className="text-xs text-[#6B756F] mt-0.5">
-                  Pre-filled from your registered donor profile. Directly editable or auto-fillable with device GPS.
-                </p>
-              </div>
-
-              {/* Use Current Device GPS button */}
-              <button
-                type="button"
-                disabled={isDetectingLocation}
-                onClick={handleUseCurrentLocation}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E8F5E9] hover:bg-[#d8eedb] text-[#1B5E20] border border-[#C8E6C9] text-xs font-bold transition-all cursor-pointer shadow-2xs self-start sm:self-auto"
-                title="Detect device GPS coordinates and autofill address"
-              >
-                <Navigation className={`w-3.5 h-3.5 ${isDetectingLocation ? 'animate-spin' : ''}`} />
-                <span>{isDetectingLocation ? 'Detecting GPS...' : 'Use My Current Location'}</span>
-              </button>
-            </div>
-
-            {locationNotice && (
-              <div className="p-3 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-xs text-[#1B5E20] flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{locationNotice}</span>
-              </div>
-            )}
-
-            {formErrors.address && (
-              <p role="alert" className="text-xs text-red-600 font-medium">
-                {formErrors.address}
-              </p>
-            )}
-
-            {/* Address fields: Directly editable, no lock */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Address Line 1 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={addressLine1}
-                  onChange={(e) => setAddressLine1(e.target.value)}
-                  placeholder="Street / Building / Door No."
-                  className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Area / Locality <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={areaLocality}
-                  onChange={(e) => setAreaLocality(e.target.value)}
-                  placeholder="Area / Neighborhood"
-                  className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  Landmark
-                </label>
-                <input
-                  type="text"
-                  value={landmark}
-                  onChange={(e) => setLandmark(e.target.value)}
-                  placeholder="Nearby Landmark"
-                  className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#29352F] mb-1">
-                  State / PIN
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                  />
-                  <input
-                    type="text"
-                    value={pincode}
-                    onChange={(e) => setPincode(e.target.value)}
-                    placeholder="PIN Code"
-                    className="w-24 px-3 py-2 text-xs font-medium rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Embedded Draggable Leaflet Map */}
-            <div className="pt-2">
-              <span className="text-[11px] font-semibold text-[#6B756F] block mb-1">
-                Pinpoint exact collection door (drag pin to reposition):
-              </span>
-              <CollectionLocationMap
-                latitude={latitude}
-                longitude={longitude}
-                onLocationChange={handleMapLocationChange}
-              />
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 7: DONOR RESPONSIBILITY & SAFETY DECLARATION */}
-          {/* ======================================================== */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E6EAE7] shadow-2xs space-y-4">
-            <div className="flex items-start gap-3">
-              <input
-                id="safety-consent"
-                type="checkbox"
-                checked={safetyCertified}
-                onChange={(e) => {
-                  setSafetyCertified(e.target.checked)
-                  if (formErrors.safety) setFormErrors((prev) => ({ ...prev, safety: '' }))
-                }}
-                className="mt-1 w-4 h-4 rounded text-[#1B5E20] border-[#E6EAE7] focus:ring-[#1B5E20] cursor-pointer"
-              />
-              <label
-                htmlFor="safety-consent"
-                className="text-xs text-[#29352F] leading-relaxed cursor-pointer select-none"
-              >
-                <strong className="block font-bold mb-0.5">
-                  Food Safety & Verification Commitment:
-                </strong>
-                I certify that this surplus food was cooked or handled under hygienic conditions, is fit for consumption, and has been stored at safe temperatures. I agree to share the 6-digit Handover OTP with the volunteer in person only after they arrive and verify the items.
-              </label>
-            </div>
-            {formErrors.safety && (
-              <p role="alert" className="text-xs text-red-600 font-medium">
-                {formErrors.safety}
-              </p>
-            )}
-
-            <div className="p-3 rounded-xl bg-[#FFF0DB]/60 border border-[#FFE0B2] text-xs text-[#9A3412] flex items-start gap-2">
-              <Info className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                <strong>Handover OTP Protocol:</strong> Upon publishing, you will receive a secure 6-digit Handover OTP. The volunteer must enter this code upon collection to confirm handover.
-              </span>
-            </div>
-          </div>
-
-          {/* Primary Action Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 px-6 rounded-xl text-sm font-bold text-white bg-[#29352F] hover:bg-[#1B231F] disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs"
-            >
-              {isSubmitting ? (
-                <>
-                  <Clock className="w-4 h-4 animate-spin" />
-                  <span>Publishing Food Donation...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Publish Surplus Food Donation</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
+  return <div className="min-h-screen bg-[#FAFAFA] text-[#29352F] antialiased pb-12">
+    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-[#E6EAE7]"><div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#6B756F] hover:text-[#29352F] px-3 py-2 rounded-lg border border-[#E6EAE7] hover:bg-neutral-50 transition-colors cursor-pointer"><ArrowLeft className="w-4 h-4" />Cancel & Back</button>
+      <div className="text-right sm:text-center"><h1 className="font-heading font-bold text-base sm:text-lg">Donate Surplus Food</h1><p className="hidden sm:block text-sm text-[#6B756F]">Create a listing for volunteer collection</p></div>
+    </div></div>
+    <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-5">
+      {formErrors.submit && <div role="alert" className="mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-start gap-2.5"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><div><strong className="font-semibold block">Couldn’t publish donation</strong>{formErrors.submit}</div></div>}
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <section className={sectionClass}><div><h2 className={sectionTitleClass}><Camera className="w-5 h-5 text-[#1B5E20]" />1. Food Photos</h2><p className={helperClass}>Upload one combined photo or several real photos of the food. Photos are optional but help volunteers prepare for collection.</p></div>
+          {photoError && <p role="alert" className="text-sm text-red-600 font-medium">{photoError}</p>}
+          {uploadedPhotos.length > 0 && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{uploadedPhotos.map((photo, index) => <div key={`${photo.slice(0, 40)}-${index}`} className="relative h-28 rounded-xl overflow-hidden border border-[#E6EAE7] bg-neutral-100"><img src={photo} alt={`Uploaded food photo ${index + 1}`} className="w-full h-full object-cover" /><button type="button" onClick={() => setUploadedPhotos((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/65 text-white hover:bg-red-600 cursor-pointer" title="Remove photo" aria-label={`Remove photo ${index + 1}`}><Trash2 className="w-4 h-4" /></button></div>)}</div>}
+          <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#2E7D32]/55 hover:border-[#1B5E20] bg-white text-sm font-medium text-[#29352F] cursor-pointer"><Camera className="w-4 h-4 text-[#1B5E20]" />{uploadedPhotos.length ? 'Add or replace photos' : 'Upload Food Photos'}<input type="file" accept="image/*" multiple onChange={handlePhotosUpload} className="sr-only" /></label><span className="ml-2 text-sm text-[#6B756F]">JPG, PNG, or WEBP; up to 5MB each</span>
+        </section>
+        <section className={sectionClass}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className={sectionTitleClass}><UtensilsCrossed className="w-5 h-5 text-[#1B5E20]" />2. Food Items & Quantities <span className="text-red-500">*</span></h2><p className={helperClass}>List each food item, its quantity, and the unit used.</p></div><button type="button" onClick={addFoodItemRow} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#E8F5E9] hover:bg-[#d8eedb] text-[#1B5E20] text-sm font-medium border border-[#C8E6C9] cursor-pointer"><Plus className="w-4 h-4" />Add Item</button></div>
+          {formErrors.items && <p role="alert" className="text-sm text-red-600 font-medium">{formErrors.items}</p>}
+          <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_8rem_9rem_2.5rem] gap-2 items-center px-1 text-xs font-semibold uppercase tracking-wide text-[#6B756F]"><span>Food item name</span><span>Quantity</span><span>Unit</span><span className="sr-only">Remove</span></div>
+          <div className="space-y-2">{foodItems.map((item, index) => <div key={item.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem_9rem_2.5rem] gap-2 items-end rounded-xl border border-[#E6EAE7] bg-[#FAFAFA] p-3 sm:p-2.5"><div><label className="sm:sr-only" htmlFor={`food-name-${item.id}`}>Food item name</label><input id={`food-name-${item.id}`} value={item.name} onChange={(event) => handleItemChange(item.id, 'name', event.target.value)} placeholder={index === 0 ? 'e.g. Vegetable biryani' : 'Food item name'} className={fieldClass} /></div><div><label className="sm:sr-only" htmlFor={`food-quantity-${item.id}`}>Quantity</label><input id={`food-quantity-${item.id}`} type="number" min="0.01" step="any" inputMode="decimal" value={item.quantity} onChange={(event) => handleItemChange(item.id, 'quantity', event.target.value)} placeholder="0" className={fieldClass} /></div><div><label className="sm:sr-only" htmlFor={`food-unit-${item.id}`}>Unit</label><select id={`food-unit-${item.id}`} value={item.unit} onChange={(event) => handleItemChange(item.id, 'unit', event.target.value as FoodItemUnit)} className={`${fieldClass} cursor-pointer`}><option value="kg">kg</option><option value="litres">litres</option><option value="portions">portions</option><option value="packets">packets</option><option value="boxes">boxes</option><option value="containers">containers</option></select></div><button type="button" disabled={foodItems.length === 1} onClick={() => removeFoodItemRow(item.id)} className="min-h-11 inline-flex items-center justify-center rounded-xl border border-transparent text-[#6B756F] hover:bg-white hover:border-[#E6EAE7] hover:text-red-600 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer" title="Remove item" aria-label={`Remove ${item.name || `food item ${index + 1}`}`}><Trash2 className="w-5 h-5" /></button></div>)}</div>
+        </section>
+        <section className={sectionClass}><div><h2 className={sectionTitleClass}><Users className="w-5 h-5 text-[#1B5E20]" />3. Estimated People Served <span className="text-red-500">*</span></h2><p className={helperClass}>Enter the approximate number of people this donation can feed.</p></div><div className="max-w-sm"><label htmlFor="people-served" className={labelClass}>Estimated people served</label><div className="relative"><input id="people-served" type="number" min="1" step="1" inputMode="numeric" value={peopleServed} onChange={(event) => { setPeopleServed(event.target.value); clearError('peopleServed') }} placeholder="e.g. 50" className={`${fieldClass} pr-20`} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#6B756F]">people</span></div>{formErrors.peopleServed && <p role="alert" className="mt-1.5 text-sm text-red-600">{formErrors.peopleServed}</p>}</div></section>
+        <section className={sectionClass}><div><h2 className={sectionTitleClass}><Clock className="w-5 h-5 text-[#1B5E20]" />4. Food Category & Preparation Time <span className="text-red-500">*</span></h2><p className={helperClass}>Select every category that applies, then tell volunteers when the food was prepared.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><span className={labelClass}>Food Categories</span><div className="grid grid-cols-1 gap-2" role="group" aria-label="Food categories">{FOOD_CATEGORIES.map((category) => { const selected = foodCategories.includes(category.value); return <label key={category.value} className={`min-h-11 flex items-center gap-2.5 px-3 rounded-xl border text-sm cursor-pointer transition-colors ${selected ? 'border-[#72AE86] bg-[#EEF8F0] text-[#155F34]' : 'border-[#E6EAE7] bg-white text-[#29352F] hover:border-[#BFDCC7]'}`}><input type="checkbox" checked={selected} onChange={() => toggleFoodCategory(category.value)} className="w-4 h-4 rounded text-[#1B5E20] border-[#B7C3BA] focus:ring-[#1B5E20]" /><span className="font-medium">{category.label}</span></label> })}</div><div className="mt-2 flex flex-wrap gap-1.5" aria-live="polite">{foodCategories.map((value) => <span key={value} className="inline-flex rounded-full bg-[#E8F5E9] border border-[#C8E6C9] px-2.5 py-1 text-xs font-medium text-[#1B5E20]">{FOOD_CATEGORIES.find((category) => category.value === value)?.label}</span>)}</div>{formErrors.foodCategory && <p role="alert" className="mt-1.5 text-sm text-red-600">{formErrors.foodCategory}</p>}</div><div><label htmlFor="preparation-time" className={labelClass}>Food Preparation Date & Time</label><input id="preparation-time" type="datetime-local" value={prepTime} onChange={(event) => { setPrepTime(event.target.value); clearError('preparation') }} className={fieldClass} />{formErrors.preparation && <p role="alert" className="mt-1.5 text-sm text-red-600">{formErrors.preparation}</p>}{foodCategories.includes('other') && <div className="mt-4"><label htmlFor="custom-food-category" className={labelClass}>Specify Food Category <span className="text-red-500">*</span></label><input id="custom-food-category" value={customFoodCategory} onChange={(event) => { setCustomFoodCategory(event.target.value); clearError('foodCategory') }} placeholder="Describe the additional food category" className={fieldClass} /></div>}</div></div></section>
+        <section className={sectionClass}><div><h2 className={sectionTitleClass}><Calendar className="w-5 h-5 text-[#1B5E20]" />5. Pickup Schedule & Volunteer Instructions <span className="text-red-500">*</span></h2><p className={helperClass}>Set the expected pickup and the final collection deadline separately.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label htmlFor="pickup-time" className={labelClass}>Pickup Date & Time</label><input id="pickup-time" type="datetime-local" value={pickupTime} onChange={(event) => { setPickupTime(event.target.value); clearError('pickup'); clearError('deadline') }} className={fieldClass} />{formErrors.pickup && <p role="alert" className="mt-1.5 text-sm text-red-600">{formErrors.pickup}</p>}</div><div><label htmlFor="pickup-deadline" className={labelClass}>Donation Deadline</label><input id="pickup-deadline" type="datetime-local" value={pickupDeadline} onChange={(event) => { setPickupDeadline(event.target.value); clearError('deadline') }} className={fieldClass} />{formErrors.deadline && <p role="alert" className="mt-1.5 text-sm text-red-600">{formErrors.deadline}</p>}</div></div><div><label htmlFor="pickup-notes" className={labelClass}>Pickup Notes & Directions for Volunteer <span className="font-normal text-[#6B756F]">(optional)</span></label><textarea id="pickup-notes" rows={3} value={pickupInstructions} onChange={(event) => setPickupInstructions(event.target.value)} placeholder="e.g. Please enter via the rear kitchen service gate and call at reception." className={`${fieldClass} resize-y`} /></div></section>
+        <section className={sectionClass}><div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3"><div><h2 className={sectionTitleClass}><MapPin className="w-5 h-5 text-[#1B5E20]" />6. Pickup Address & Map Pin <span className="text-red-500">*</span></h2><p className={helperClass}>Use your registered address or enter another pickup location for this donation.</p></div><button type="button" disabled={isDetectingLocation} onClick={handleUseCurrentLocation} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#E8F5E9] hover:bg-[#d8eedb] text-[#1B5E20] border border-[#C8E6C9] text-sm font-medium disabled:opacity-60 cursor-pointer"><Navigation className={`w-4 h-4 ${isDetectingLocation ? 'animate-spin' : ''}`} />{isDetectingLocation ? 'Detecting location…' : 'Use My Current Location'}</button></div><div><label htmlFor="address-source" className={labelClass}>Pickup address</label><select id="address-source" value={selectedAddressOption} onChange={(event) => { const option = event.target.value as 'saved' | 'new'; setSelectedAddressOption(option); if (option === 'saved') applySavedAddress() }} className={`${fieldClass} cursor-pointer`}><option value="saved">Saved address: {donorProfile.collectionAddress.addressLine1}, {donorProfile.collectionAddress.areaLocality}</option><option value="new">Add New Address / Alternate Location</option></select></div>{locationNotice && <div className="p-3 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-sm text-[#1B5E20] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 shrink-0" />{locationNotice}</div>}{formErrors.address && <p role="alert" className="text-sm text-red-600 font-medium">{formErrors.address}</p>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div className="sm:col-span-2"><label htmlFor="address-line-1" className={labelClass}>Address Line 1 <span className="text-red-500">*</span></label><input id="address-line-1" value={addressLine1} onChange={(event) => { setAddressLine1(event.target.value); clearError('address') }} placeholder="Street, building, or door number" className={fieldClass} /></div><div><label htmlFor="area" className={labelClass}>Area / Locality <span className="text-red-500">*</span></label><input id="area" value={areaLocality} onChange={(event) => { setAreaLocality(event.target.value); clearError('address') }} placeholder="Area or neighbourhood" className={fieldClass} /></div><div><label htmlFor="landmark" className={labelClass}>Landmark <span className="font-normal text-[#6B756F]">(optional)</span></label><input id="landmark" value={landmark} onChange={(event) => setLandmark(event.target.value)} placeholder="Nearby landmark" className={fieldClass} /></div><div><label htmlFor="city" className={labelClass}>City</label><input id="city" value={city} onChange={(event) => setCity(event.target.value)} className={fieldClass} /></div><div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2"><div><label htmlFor="state" className={labelClass}>State</label><input id="state" value={state} onChange={(event) => setState(event.target.value)} className={fieldClass} /></div><div><label htmlFor="pincode" className={labelClass}>PIN Code</label><input id="pincode" value={pincode} onChange={(event) => setPincode(event.target.value)} className={fieldClass} /></div></div></div><div><p className="mb-2 text-sm font-medium text-[#29352F]">Pinpoint the collection location</p><CollectionLocationMap latitude={latitude} longitude={longitude} onLocationChange={handleMapLocationChange} /></div></section>
+        <AccountabilityChecklist title="Food Safety Checklist" checked={safetyChecks} onChange={updateSafetyCheck} items={[
+          'The food is not visibly spoiled.', 'The food does not have an unusual/off smell.', 'The food does not show visible mould or obvious contamination.', 'I am not knowingly donating food that is unsafe for human consumption.', 'The food has been handled and stored appropriately to the best of my knowledge.', 'I have provided accurate information about when the food was prepared and how it was stored/handled.', 'I have disclosed known ingredients/allergens that may be relevant to recipients.', 'The quantity and description of the food I entered are accurate.', 'I understand that the platform does not independently certify the food as safe and that I am responsible for the accuracy of the information I provide.', 'I confirm that the above information is truthful and accurate to the best of my knowledge.',
+        ]} />
+        {formErrors.safety && <p role="alert" className="text-sm font-medium text-red-600">{formErrors.safety}</p>}
+        <button type="submit" disabled={isSubmitting || !safetyChecks.every(Boolean)} className="w-full min-h-13 py-3 px-6 rounded-xl text-base font-semibold text-white bg-[#29352F] hover:bg-[#1B231F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs">{isSubmitting ? <><Clock className="w-5 h-5 animate-spin" />Publishing Food Donation…</> : <><ShieldCheck className="w-5 h-5" />Publish Surplus Food Donation</>}</button>
+      </form>
+    </main>
+  </div>
 }

@@ -2,7 +2,7 @@ import React from 'react'
 import { AlertCircle } from 'lucide-react'
 
 interface FormFieldProps {
-  id: string
+  id?: string
   label: string
   required?: boolean
   hint?: string
@@ -12,7 +12,7 @@ interface FormFieldProps {
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
-  id,
+  id = 'form-field',
   label,
   required,
   hint,

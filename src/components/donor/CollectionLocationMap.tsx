@@ -7,6 +7,7 @@ interface CollectionLocationMapProps {
   longitude: number | null
   onLocationChange: (lat: number, lng: number) => void
   onAutofillRequest?: () => Promise<void> | void
+  showCurrentLocationControl?: boolean
   city?: string
   state?: string
 }
@@ -20,6 +21,7 @@ export const CollectionLocationMap: React.FC<CollectionLocationMapProps> = ({
   longitude,
   onLocationChange,
   onAutofillRequest,
+  showCurrentLocationControl = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
@@ -257,16 +259,17 @@ export const CollectionLocationMap: React.FC<CollectionLocationMapProps> = ({
           </button>
         </form>
 
-        {/* GPS location button */}
-        <button
-          type="button"
-          onClick={handleUseCurrentLocation}
-          disabled={isLocating}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-[#EAF3FF] border border-[#BFDBFE] text-[#1E40AF] hover:bg-[#D8EAFF] transition-colors cursor-pointer shrink-0"
-        >
-          <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-          <span>{isLocating ? 'Acquiring GPS...' : 'Use My Current Location'}</span>
-        </button>
+        {showCurrentLocationControl && (
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-[#EAF3FF] border border-[#BFDBFE] text-[#1E40AF] hover:bg-[#D8EAFF] transition-colors cursor-pointer shrink-0"
+          >
+            <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+            <span>{isLocating ? 'Acquiring GPS...' : 'Use My Current Location'}</span>
+          </button>
+        )}
       </div>
 
       {/* Geolocation feedback / error */}

@@ -1,10 +1,9 @@
 import React from 'react'
 import type { CountryCode } from '../../types/registration'
-import { ShieldCheck } from 'lucide-react'
 
 
 interface PhoneNumberInputProps {
-  id: string
+  id?: string
   countryCode: CountryCode
   onCountryCodeChange: (code: CountryCode) => void
   phoneNumber: string
@@ -23,7 +22,7 @@ const COUNTRIES: { code: CountryCode; label: string; flag: string; digits: numbe
 ]
 
 export const PhoneNumberInput: React.FC<PhoneNumberInputProps> = ({
-  id,
+  id = 'phone-number-input',
   countryCode,
   onCountryCodeChange,
   phoneNumber,
@@ -75,17 +74,11 @@ export const PhoneNumberInput: React.FC<PhoneNumberInputProps> = ({
           onBlur={onBlur}
           placeholder={`Enter ${currentCountry.digits}-digit phone number`}
           aria-invalid={isInvalid ? 'true' : undefined}
-          aria-describedby={`${id}-hint ${isInvalid ? `${id}-error` : ''}`}
+          aria-describedby={isInvalid ? `${id}-error` : undefined}
           className={`w-full px-3.5 py-2.5 text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 bg-white focus:outline-none ${
             isInvalid ? 'bg-red-50/30' : ''
           }`}
         />
-      </div>
-
-      {/* Security explanation note */}
-      <div className="flex items-center gap-1.5 text-[11px] text-[#6B756F]">
-        <ShieldCheck className="w-3.5 h-3.5 text-[#1B5E20] shrink-0" />
-        <span>A 6-digit one-time password (OTP) will be sent to this number to verify ownership.</span>
       </div>
     </div>
   )

@@ -2,6 +2,13 @@ import type { FoodSourceType, DonorCollectionAddress } from './registration.ts'
 
 export type FoodItemUnit = 'kg' | 'packets' | 'boxes' | 'portions' | 'litres' | 'containers'
 export type FoodCategoryType = 'veg' | 'non_veg' | 'vegan'
+export type DonationFoodCategory =
+  | 'prepared_meals'
+  | 'bakery_bread_items'
+  | 'fruits'
+  | 'vegetables'
+  | 'groceries'
+  | 'other'
 
 export interface FoodItem {
   id: string
@@ -49,6 +56,8 @@ export interface DonationClaim {
   lastLocationUpdate?: string
   isBroadcastingGps?: boolean
   estimatedArrivalMinutes?: number
+  pickupChecklistAccepted?: boolean[]
+  pickupChecklistAcceptedAt?: string
 }
 
 export interface PickupSchedule {
@@ -69,6 +78,12 @@ export interface Donation {
   totalQuantityLabel: string
   estimatedPeopleServed: number
   foodPreparationTime: string
+  /** Donor-selected listing category; distinct from each individual food item. */
+  foodCategory?: DonationFoodCategory
+  /** Complete donor-selected category list. foodCategory is retained for older listings. */
+  foodCategories?: DonationFoodCategory[]
+  customFoodCategory?: string
+  /** Retained for compatibility with existing listings and downstream displays. */
   foodShelfLifeCategory: 'cooked_meals' | 'bakery_bread' | 'fresh_produce' | 'packaged_dry'
   earliestSafeUntil: string
   pickupSchedule: PickupSchedule
@@ -77,6 +92,8 @@ export interface Donation {
   status: DonationStatus
   createdAt: string
   handoverOtp: string // 6-digit code for physical verification upon collection
+  foodSafetyChecklistAccepted?: boolean[]
+  foodSafetyChecklistAcceptedAt?: string
   handoverVerifiedAt?: string
   claim?: DonationClaim
   cancellationReason?: string
@@ -111,9 +128,13 @@ export interface CreateDonationPayload {
   }>
   estimatedPeopleServed: number
   foodPreparationTime: string
+  foodCategory?: DonationFoodCategory
+  foodCategories: DonationFoodCategory[]
+  customFoodCategory?: string
   foodShelfLifeCategory: 'cooked_meals' | 'bakery_bread' | 'fresh_produce' | 'packaged_dry'
   safeUntilHours: number
   pickupSchedule: PickupSchedule
   collectionAddress: DonorCollectionAddress
   photos?: string[]
+  foodSafetyChecklistAccepted?: boolean[]
 }

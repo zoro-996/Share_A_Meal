@@ -79,7 +79,7 @@ export class SMSVerificationService {
       accountSid: config?.accountSid || process.env.SMS_ACCOUNT_SID,
       authToken: config?.authToken || process.env.SMS_AUTH_TOKEN,
       verifyServiceSid: config?.verifyServiceSid || process.env.SMS_VERIFY_SERVICE_SID,
-      secretKey: config?.secretKey || process.env.OTP_SECRET || 'share-a-meal-otp-signing-secret-key-2026',
+      secretKey: config?.secretKey || process.env.OTP_SECRET || '',
     }
   }
 
@@ -91,6 +91,7 @@ export class SMSVerificationService {
     if (!this.config.accountSid) missing.push('SMS_ACCOUNT_SID')
     if (!this.config.authToken) missing.push('SMS_AUTH_TOKEN')
     if (!this.config.verifyServiceSid) missing.push('SMS_VERIFY_SERVICE_SID')
+    if (!this.config.secretKey) missing.push('OTP_SECRET')
 
     return {
       configured: missing.length === 0,

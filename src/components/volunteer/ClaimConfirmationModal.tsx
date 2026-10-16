@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { claimDonation, getCurrentVolunteer } from '../../services/donationService'
 import type { Donation } from '../../types/donation'
+import { AccountabilityChecklist } from '../common/AccountabilityChecklist'
 
 interface ClaimConfirmationModalProps {
   donation: Donation
@@ -26,7 +27,8 @@ export const ClaimConfirmationModal: React.FC<ClaimConfirmationModalProps> = ({
   onRaceCondition,
 }) => {
   const volunteer = getCurrentVolunteer()
-  const [commitmentChecked, setCommitmentChecked] = useState(false)
+  const [claimChecks, setClaimChecks] = useState<boolean[]>(() => Array(10).fill(false))
+  const updateClaimCheck = (index: number, checked: boolean) => setClaimChecks((checks) => checks.map((value, itemIndex) => itemIndex === index ? checked : value))
   const [isClaiming, setIsClaiming] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -34,8 +36,8 @@ export const ClaimConfirmationModal: React.FC<ClaimConfirmationModalProps> = ({
   const deadlineDate = new Date(donation.pickupSchedule.deadlineTime)
 
   const handleClaim = async () => {
-    if (!commitmentChecked) {
-      setErrorMessage('Please confirm your collection commitment before claiming.')
+    if (!claimChecks.every(Boolean)) {
+      setErrorMessage('Please accept every pickup and distribution responsibility before claiming.')
       return
     }
 
@@ -43,7 +45,7 @@ export const ClaimConfirmationModal: React.FC<ClaimConfirmationModalProps> = ({
     setErrorMessage(null)
 
     try {
-      const updated = await claimDonation(donation.id, volunteer)
+      const updated = await claimDonation(donation.id, volunteer, claimChecks)
       onClaimSuccess(updated.id)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to claim donation.'
@@ -159,28 +161,9 @@ export const ClaimConfirmationModal: React.FC<ClaimConfirmationModalProps> = ({
           </p>
         </div>
 
-        {/* Handover OTP Notice for Volunteer */}
-        <div className="p-3.5 rounded-xl bg-[#FFF0DB]/70 border border-[#FFE0B2] text-xs text-[#9A3412]">
-          <strong className="block font-bold mb-0.5">Physical Collection Protocol:</strong>
-          <span>
-            When you arrive at the donor's collection point, inspect the food containers and ask the donor for their <strong>6-digit Handover OTP</strong>. You will enter this OTP in the live tracker to confirm collection.
-          </span>
-        </div>
-
-        {/* Volunteer Commitment Declaration */}
-        <div className="pt-2">
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={commitmentChecked}
-              onChange={(e) => setCommitmentChecked(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded text-[#2E7D32] border-[#E6EAE7] focus:ring-[#2E7D32] cursor-pointer"
-            />
-            <span className="text-xs text-[#29352F] leading-relaxed select-none">
-              <strong>I commit to collecting this surplus food run:</strong> I will arrive at the collection point before the deadline, transport the food safely using clean containers, and deliver it to people in need.
-            </span>
-          </label>
-        </div>
+        <AccountabilityChecklist title="Pickup & Distribution Responsibilities" tone="orange" checked={claimChecks} onChange={updateClaimCheck} items={[
+          'I can reach the pickup location within the specified pickup time.', 'I understand what food and quantity I am collecting.', 'I will make reasonable efforts to transport and handle the food appropriately.', 'I will not intentionally leave the donated food unattended or expose it to avoidable contamination.', 'I will take the food to the destination/purpose stated in the app.', 'I will not intentionally resell or commercially misuse the donated food.', 'I will provide truthful information about the distribution of the food.', 'If I cannot complete the pickup or distribution, I will report the issue through the app instead of falsely marking it as completed.', 'I understand that claiming a donation creates a responsibility to make reasonable efforts to complete the pickup and distribution.', 'I confirm that I have read and accepted the above responsibilities.',
+        ]} />
 
         {/* Buttons */}
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E6EAE7]">
@@ -194,7 +177,7 @@ export const ClaimConfirmationModal: React.FC<ClaimConfirmationModalProps> = ({
 
           <button
             type="button"
-            disabled={isClaiming || !commitmentChecked}
+            disabled={isClaiming || !claimChecks.every(Boolean)}
             onClick={handleClaim}
             className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
           >

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X,
   User,
   Phone,
   MapPin,
   Building2,
-  Bike,
   ShieldCheck,
   Edit3,
   CheckCircle2,
@@ -42,12 +42,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // Donor form state
   const [donorData, setDonorData] = useState<DonorUserProfile>(getCurrentDonor())
 
   // Volunteer form state
   const [volunteerData, setVolunteerData] = useState<VolunteerUserProfile>(getCurrentVolunteer())
+
+  // Lock body scroll when modal is open to prevent background scrolling & freezing
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    dialogRef.current?.focus()
+  }, [isOpen])
 
   // Fetch latest profile from backend on open
   useEffect(() => {
@@ -73,17 +91,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
     try {
       if (role === 'donor') {
-        if (!donorData.name.trim() || !donorData.phone.trim()) {
-          throw new Error('Name and phone number are required.')
+        if (!donorData.name.trim()) {
+          throw new Error('Full Name is required.')
         }
         if (!donorData.collectionAddress.addressLine1.trim() || !donorData.collectionAddress.areaLocality.trim()) {
-          throw new Error('Address Line 1 and Area are required.')
+          throw new Error('Address Line 1 and Area / Locality are required.')
         }
         const updated = await updateDonorProfile(donorData)
         setDonorData(updated)
       } else {
-        if (!volunteerData.name.trim() || !volunteerData.phone.trim()) {
-          throw new Error('Name and phone number are required.')
+        if (!volunteerData.name.trim()) {
+          throw new Error('Full Name is required.')
         }
         const updated = await updateVolunteerProfile(volunteerData)
         setVolunteerData(updated)
@@ -92,7 +110,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setSaveSuccess(true)
       setIsEditing(false)
       if (onProfileUpdated) onProfileUpdated()
-      setTimeout(() => setSaveSuccess(false), 3000)
+
+      // Automatically close the modal after brief confirmation
+      setTimeout(() => {
+        setSaveSuccess(false)
+        onClose()
+      }, 1500)
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update profile.')
     } finally {
@@ -100,18 +123,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-2xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+      aria-labelledby="profile-modal-title"
+      className="fixed inset-0 z-[100] overflow-y-auto bg-neutral-900/40 p-4 sm:p-6 backdrop-blur-2xs animate-in fade-in duration-150"
       onClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
     >
       <div
-        className="bg-white rounded-2xl border border-[#E6EAE7] shadow-2xl p-6 max-w-xl w-full relative max-h-[90vh] overflow-y-auto space-y-5"
+        ref={dialogRef}
+        tabIndex={-1}
+        className="mx-auto flex min-h-full w-full max-w-xl items-center outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        <div className="w-full max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-[#E6EAE7] bg-white p-5 shadow-2xl sm:p-6">
         <div className="flex items-center justify-between pb-3 border-b border-[#E6EAE7]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#EAF3FF] border border-[#BFDBFE] text-[#1E40AF] font-bold flex items-center justify-center text-sm shadow-2xs">
@@ -120,7 +149,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 : volunteerData.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="font-heading font-extrabold text-base text-[#29352F]">
+              <h2 id="profile-modal-title" className="font-heading font-extrabold text-base text-[#29352F]">
                 {role === 'donor' ? 'Food Donor Profile' : 'Volunteer Profile'}
               </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
@@ -142,7 +171,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </button>
         </div>
 
-        {/* Notices */}
+        <div className="space-y-5 pt-5">
         {saveSuccess && (
           <div className="p-3 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-xs text-[#1B5E20] font-medium flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -229,14 +258,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             ) : (
               <div className="space-y-3">
                 <div className="p-3.5 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F]">Volunteer Vehicle</span>
-                  <p className="font-bold text-xs text-[#29352F] mt-1 flex items-center gap-1.5">
-                    <Bike className="w-4 h-4 text-[#9A3412]" />
-                    {volunteerData.vehicle || 'Standard Two-Wheeler'}
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7]">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F]">Affiliation</span>
                   <p className="font-bold text-xs text-[#29352F] mt-1 capitalize">
                     {volunteerData.role === 'ngo_member'
@@ -247,12 +268,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             )}
 
-            {/* Action to Edit */}
-            <div className="pt-2">
+            {/* Actions */}
+            <div className="pt-3 border-t border-[#E6EAE7] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#6B756F] hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-[#29352F] bg-[#FAFAFA] border border-[#E6EAE7] hover:bg-neutral-100 transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="py-2 px-4 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit Profile Information</span>
@@ -280,22 +308,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               />
             </div>
 
-            {/* Phone Number */}
+            {/* Phone Number - Locked with clear informative text */}
             <div>
-              <label className="block text-xs font-semibold text-[#29352F] mb-1">Mobile Phone Number</label>
+              <label className="block text-xs font-semibold text-[#29352F] mb-1">
+                Registered Mobile Phone Number
+              </label>
               <input
                 type="tel"
                 value={role === 'donor' ? donorData.phone : volunteerData.phone}
-                onChange={(e) => {
-                  if (role === 'donor') {
-                    setDonorData((prev) => ({ ...prev, phone: e.target.value }))
-                  } else {
-                    setVolunteerData((prev) => ({ ...prev, phone: e.target.value }))
-                  }
-                }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                required
+                disabled
+                readOnly
+                className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-neutral-100 text-[#6B756F] cursor-not-allowed select-none"
               />
+              <p className="text-[11px] text-[#6B756F] mt-1.5 flex items-center gap-1.5 leading-snug">
+                <AlertCircle className="w-3.5 h-3.5 text-[#C25E00] shrink-0" />
+                <span>
+                  Phone number is locked for security and cannot be modified without re-authenticating with OTP verification.
+                </span>
+              </p>
             </div>
 
             {/* Donor Fields */}
@@ -320,20 +350,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <div className="space-y-2 pt-2 border-t border-[#E6EAE7]">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F]">Saved Collection Address</span>
 
-                  <div>
-                    <label className="block text-[11px] text-[#6B756F] mb-1">Address Line 1</label>
-                    <input
-                      type="text"
-                      value={donorData.collectionAddress.addressLine1}
-                      onChange={(e) =>
-                        setDonorData((prev) => ({
-                          ...prev,
-                          collectionAddress: { ...prev.collectionAddress, addressLine1: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                      required
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-[#6B756F] mb-1">Address Line 1</label>
+                      <input
+                        type="text"
+                        value={donorData.collectionAddress.addressLine1}
+                        onChange={(e) =>
+                          setDonorData((prev) => ({
+                            ...prev,
+                            collectionAddress: { ...prev.collectionAddress, addressLine1: e.target.value },
+                          }))
+                        }
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#6B756F] mb-1">Address Line 2 (Optional)</label>
+                      <input
+                        type="text"
+                        value={donorData.collectionAddress.addressLine2 || ''}
+                        onChange={(e) =>
+                          setDonorData((prev) => ({
+                            ...prev,
+                            collectionAddress: { ...prev.collectionAddress, addressLine2: e.target.value },
+                          }))
+                        }
+                        placeholder="Floor, Suite, Wing"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -413,6 +460,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-[11px] text-[#6B756F] mb-1">Additional Pickup Directions (Optional)</label>
+                    <input
+                      type="text"
+                      value={donorData.collectionAddress.additionalDirections || ''}
+                      onChange={(e) =>
+                        setDonorData((prev) => ({
+                          ...prev,
+                          collectionAddress: { ...prev.collectionAddress, additionalDirections: e.target.value },
+                        }))
+                      }
+                      placeholder="e.g. Kitchen dispatch counter on Ground Floor rear."
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
+                    />
+                  </div>
                 </div>
               </>
             )}
@@ -420,17 +483,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             {/* Volunteer Fields */}
             {role === 'volunteer' && (
               <>
-                <div>
-                  <label className="block text-xs font-semibold text-[#29352F] mb-1">Vehicle Details</label>
-                  <input
-                    type="text"
-                    value={volunteerData.vehicle}
-                    onChange={(e) => setVolunteerData((prev) => ({ ...prev, vehicle: e.target.value }))}
-                    placeholder="e.g. Hero Electric Bike, Honda Activa"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] focus:outline-none focus:border-[#29352F]"
-                  />
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-[#29352F] mb-1">Role Type</label>
                   <select
@@ -483,7 +535,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           </form>
         )}
+        </div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

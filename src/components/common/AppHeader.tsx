@@ -4,11 +4,9 @@ import {
   Bell,
   User,
   LogOut,
-  ChevronDown,
   HeartHandshake,
   PackageCheck,
   CheckCircle2,
-  Clock,
   ArrowRight,
 } from 'lucide-react'
 import { useNavigation } from '../../context/useNavigation'
@@ -17,7 +15,9 @@ import {
   markNotificationAsRead,
   getCurrentDonor,
   getCurrentVolunteer,
+  clearCurrentSession,
 } from '../../services/donationService'
+import { logoutUser } from '../../services/authService'
 import type { DonationNotification } from '../../types/donation'
 import { ProfileModal } from './ProfileModal'
 
@@ -30,7 +30,7 @@ interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   currentPortal,
-  activePickupCount = 0,
+  activePickupCount: _activePickupCount = 0,
   onNavigateTracking,
   onProfileUpdated,
 }) => {
@@ -50,7 +50,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const userSubtext =
     currentPortal === 'donor'
       ? `${donorProfile.donorType === 'restaurant' ? 'Restaurant' : 'Food Donor'} • ${donorProfile.collectionAddress.areaLocality}`
-      : `${volunteerProfile.role === 'ngo_member' ? 'NGO Member' : 'Volunteer'} • ${volunteerProfile.vehicle}`
+      : volunteerProfile.role === 'ngo_member' ? 'NGO Member' : 'Volunteer'
 
   useEffect(() => {
     let isMounted = true
@@ -107,6 +107,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await logoutUser()
+    } finally {
+      clearCurrentSession()
+      navigate('/')
+    }
+  }
+
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-xs border-b border-[#E6EAE7] transition-all">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -129,7 +138,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </button>
 
           {/* Current Role Pill */}
-          <div className="hidden sm:flex items-center gap-1.5 ml-2">
+          <div className="flex items-center gap-1.5 ml-2">
             <span
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
                 currentPortal === 'donor'
@@ -149,13 +158,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </>
               )}
             </span>
-
-            {activePickupCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#EAF3FF] text-[#1E40AF] border border-[#BFDBFE]">
-                <Clock className="w-3 h-3 animate-pulse" />
-                {activePickupCount} Active
-              </span>
-            )}
           </div>
         </div>
 
@@ -249,20 +251,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 setShowProfileMenu(!showProfileMenu)
                 setShowNotifMenu(false)
               }}
-              className="flex items-center gap-2 p-1.5 sm:px-2.5 rounded-xl border border-[#E6EAE7] hover:bg-neutral-50 transition-colors cursor-pointer"
+              aria-label="User profile menu"
+              title={userName || 'User Profile'}
+              className="w-9 h-9 rounded-full bg-[#FAFAFA] border border-[#E6EAE7] hover:border-[#29352F] hover:bg-neutral-100 text-[#29352F] transition-all flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#29352F]/20"
             >
-              <div className="w-7 h-7 rounded-lg bg-[#EAF3FF] border border-[#BFDBFE] text-[#1E40AF] flex items-center justify-center font-bold text-xs">
-                {userName ? userName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
-              </div>
-              <div className="hidden sm:block text-left">
-                <div className="text-xs font-bold text-[#29352F] leading-tight line-clamp-1 max-w-[120px]">
-                  {userName}
-                </div>
-                <div className="text-[10px] text-[#6B756F] leading-none capitalize">
-                  {currentPortal}
-                </div>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-[#6B756F]" />
+              <User className="w-4 h-4 text-[#29352F]" />
             </button>
 
             {/* Profile Menu Popover */}
@@ -275,10 +268,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <div className="text-[11px] text-[#6B756F] mt-0.5">
                     {userSubtext}
                   </div>
-                  <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#1B5E20] bg-[#E8F5E9] px-2 py-0.5 rounded-md border border-[#C8E6C9]">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Phone & Safety Verified
-                  </div>
+                  {((currentPortal === 'donor' && donorProfile.isVerified) || currentPortal === 'volunteer') && (
+                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#1B5E20] bg-[#E8F5E9] px-2 py-0.5 rounded-md border border-[#C8E6C9]">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Phone & Safety Verified
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1 text-xs">
@@ -300,11 +295,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <div className="pt-1 border-t border-[#E6EAE7]">
                     <button
                       type="button"
-                      onClick={() => navigate('/')}
+                      onClick={handleLogout}
                       className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-neutral-100 text-[#6B756F] font-medium transition-colors text-left cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      <span>Return to Landing Page</span>
+                      <span>Logout</span>
                     </button>
                   </div>
                 </div>

@@ -2,7 +2,6 @@ import React from 'react'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { useNavigation } from '../../context/useNavigation'
 
-
 interface Step {
   id: number
   title: string
@@ -15,12 +14,19 @@ interface RegistrationLayoutProps {
   currentStep: 1 | 2 | 3
   onBack?: () => void
   children: React.ReactNode
+  steps?: Step[]
 }
 
-const STEPS: Step[] = [
+const DEFAULT_DONOR_STEPS: Step[] = [
   { id: 1, title: 'Details & ID' },
-  { id: 2, title: 'Phone OTP' },
-  { id: 3, title: 'Status' },
+  { id: 2, title: 'Source & Address' },
+  { id: 3, title: 'Terms & Complete' },
+]
+
+const DEFAULT_VOLUNTEER_STEPS: Step[] = [
+  { id: 1, title: 'Details & ID' },
+  { id: 2, title: 'Role & Address' },
+  { id: 3, title: 'Terms & Complete' },
 ]
 
 export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
@@ -30,6 +36,7 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
   currentStep,
   onBack,
   children,
+  steps,
 }) => {
   const { navigate } = useNavigation()
 
@@ -44,6 +51,8 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
   const roleAccentBg = role === 'volunteer' ? 'bg-[#FFF0DB]' : 'bg-[#E8F5E9]'
   const roleAccentBorder = role === 'volunteer' ? 'border-[#FFE0B2]' : 'border-[#C8E6C9]'
   const roleAccentText = role === 'volunteer' ? 'text-[#9A3412]' : 'text-[#1B5E20]'
+
+  const activeSteps = steps || (role === 'donor' ? DEFAULT_DONOR_STEPS : DEFAULT_VOLUNTEER_STEPS)
 
   return (
     <div className="min-h-screen bg-white text-[#29352F] flex flex-col antialiased">
@@ -112,7 +121,7 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
           <nav aria-label="Registration progress" className="mb-8">
             <ol className="flex items-center justify-between relative">
               <div className="absolute top-4 left-6 right-6 h-0.5 bg-[#E6EAE7] -z-0" aria-hidden="true" />
-              {STEPS.map((step) => {
+              {activeSteps.map((step) => {
                 const isCompleted = currentStep > step.id
                 const isCurrent = currentStep === step.id
                 return (

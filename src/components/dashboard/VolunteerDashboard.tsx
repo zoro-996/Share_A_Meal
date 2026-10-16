@@ -7,13 +7,15 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  ShieldCheck,
   Bike,
   ChevronRight,
-  Flame,
+  Navigation,
+  Eye,
+  X,
 } from 'lucide-react'
 import { AppHeader } from '../common/AppHeader'
 import { FoodItemsTable } from '../common/FoodItemsTable'
+import { DashboardMetric, DashboardWelcome } from '../common/DashboardUI'
 import { ClaimConfirmationModal } from '../volunteer/ClaimConfirmationModal'
 import {
   fetchDonations,
@@ -25,27 +27,73 @@ interface VolunteerDashboardProps {
   onOpenTracker: (donationId: string) => void
 }
 
+const FOOD_CATEGORY_LABELS: Record<string, string> = {
+  prepared_meals: 'Prepared Meals',
+  bakery_bread_items: 'Bakery & Bread Items',
+  fruits: 'Fruits',
+  vegetables: 'Vegetables',
+  groceries: 'Groceries',
+  other: 'Other',
+}
+
+const donationCategoryLabels = (donation: Donation) => {
+  const categories = donation.foodCategories?.length ? donation.foodCategories : donation.foodCategory ? [donation.foodCategory] : []
+  return categories.map((category) => category === 'other' && donation.customFoodCategory?.trim()
+    ? `Other: ${donation.customFoodCategory.trim()}`
+    : FOOD_CATEGORY_LABELS[category] || category)
+}
+
 export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTracker }) => {
   const volunteer = getCurrentVolunteer()
 
   const [donations, setDonations] = useState<Donation[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Filters & Search
+  // Search by locality or food item
   const [searchQuery, setSearchQuery] = useState('')
-  const [foodTypeFilter, setFoodTypeFilter] = useState<'all' | 'veg' | 'vegan' | 'non_veg'>('all')
-  const [urgencyFilter, setUrgencyFilter] = useState(false)
   const [activeTab, setActiveTab] = useState<'available' | 'my_pickups' | 'history'>('available')
 
-  // Claim Modal State
+  // Modals & Details
   const [claimModalDonation, setClaimModalDonation] = useState<Donation | null>(null)
+  const [viewDetailsDonation, setViewDetailsDonation] = useState<Donation | null>(null)
   const [raceConditionNotice, setRaceConditionNotice] = useState<string | null>(null)
-  const [currentTime, setCurrentTime] = useState(() => Date.now())
+
+  // Real Volunteer Geolocation for distance calculation
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 15000)
-    return () => clearInterval(timer)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          })
+        },
+        () => {
+          setUserLocation({ latitude: 12.9716, longitude: 77.5946 })
+        },
+        { timeout: 8000 }
+      )
+    } else {
+      setUserLocation({ latitude: 12.9716, longitude: 77.5946 })
+    }
   }, [])
+
+  // Haversine formula to compute distance in km
+  const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLon = ((lon2 - lon1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
 
   const loadDonations = React.useCallback(async () => {
     try {
@@ -77,30 +125,16 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
   const myCompletedRuns = donations.filter(
     (d) => d.claim?.volunteerId === volunteer.id && d.status === 'completed'
   )
+  const peopleDistributed = myCompletedRuns.reduce((total, donation) => total + (donation.estimatedPeopleServed || 0), 0)
 
-  // Filtered available donations
+  // Filtered available donations by locality or food item
   const filteredAvailable = availableDonations.filter((donation) => {
-    // Search query match
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       const matchesLocality = donation.collectionAddress.areaLocality.toLowerCase().includes(q)
       const matchesItem = donation.items.some((it) => it.name.toLowerCase().includes(q))
       if (!matchesLocality && !matchesItem) return false
     }
-
-    // Food type match
-    if (foodTypeFilter !== 'all') {
-      const matchesType = donation.items.some((it) => it.foodType === foodTypeFilter)
-      if (!matchesType) return false
-    }
-
-    // Urgency match (< 2.5 hours remaining)
-    if (urgencyFilter) {
-      const remainingMinutes =
-        (new Date(donation.earliestSafeUntil).getTime() - currentTime) / (1000 * 60)
-      if (remainingMinutes > 150) return false
-    }
-
     return true
   })
 
@@ -154,7 +188,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
         onNavigateTracking={onOpenTracker}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-5 sm:space-y-6">
         {/* Active Pickup Alert Banner if any */}
         {myClaimedRuns.length > 0 && (
           <div className="p-4 rounded-2xl bg-[#FFF0DB]/80 border border-[#FFE0B2] shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
@@ -170,91 +204,43 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                   {getStatusBadge(myClaimedRuns[0].status)}
                 </div>
                 <p className="text-xs text-[#6B756F] mt-0.5">
-                  {myClaimedRuns[0].collectionAddress.areaLocality} • ~
-                  {myClaimedRuns[0].estimatedPeopleServed} people will be served
+                  Pickup area: {myClaimedRuns[0].collectionAddress.areaLocality}
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onOpenTracker(myClaimedRuns[0].id)}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center gap-1.5 self-end sm:self-auto shadow-xs"
-            >
-              <span>Open Live Tracker & Verify OTP</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <a
+                href={
+                  myClaimedRuns[0].collectionAddress.latitude && myClaimedRuns[0].collectionAddress.longitude
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${myClaimedRuns[0].collectionAddress.latitude},${myClaimedRuns[0].collectionAddress.longitude}`
+                    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                        `${myClaimedRuns[0].collectionAddress.addressLine1}, ${myClaimedRuns[0].collectionAddress.areaLocality}, ${myClaimedRuns[0].collectionAddress.city}`
+                      )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#29352F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Navigation className="w-3.5 h-3.5 text-[#1B5E20]" />
+                <span>Navigate</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => onOpenTracker(myClaimedRuns[0].id)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                <span>Open Live Tracker & Verify OTP</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
-        {/* 2. Welcome & Hero Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E6EAE7]">
-          <div>
-            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-[#9A3412] bg-[#FFF0DB] px-2.5 py-0.5 rounded-md border border-[#FFE0B2] mb-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Verified Volunteer • {volunteer.role === 'ngo_member' ? 'NGO Partner' : 'Community Volunteer'}
-            </div>
-            <h1 className="font-heading text-xl sm:text-2xl font-extrabold text-[#29352F]">
-              Hello, {volunteer.name}
-            </h1>
-            <p className="text-xs sm:text-sm text-[#6B756F] mt-0.5">
-              Claim available surplus food in your vicinity and deliver it directly to beneficiaries.
-            </p>
-          </div>
+        <DashboardWelcome title={<>Welcome back, {volunteer.name}</>} description="Browse available surplus food, claim a pickup, and help it reach people who need it." actionLabel="Explore nearby food" actionIcon={<HeartHandshake className="w-4 h-4" />} onAction={() => setActiveTab('available')} tone="orange" />
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6B756F] bg-[#FAFAFA] border border-[#E6EAE7] px-3 py-2 rounded-xl">
-              Vehicle: <strong>{volunteer.vehicle}</strong>
-            </span>
-          </div>
-        </div>
-
-        {/* 3. Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-          <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E6EAE7] flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1B5E20] flex items-center justify-center shrink-0">
-              <HeartHandshake className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-[#6B756F]">
-                Available Nearby
-              </span>
-              <div className="font-heading text-2xl font-black text-[#29352F]">
-                {availableDonations.length}
-                <span className="text-xs font-normal text-[#6B756F] ml-1">listings</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E6EAE7] flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#FFF0DB] border border-[#FFE0B2] text-[#9A3412] flex items-center justify-center shrink-0">
-              <Bike className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-[#6B756F]">
-                Active Runs
-              </span>
-              <div className="font-heading text-2xl font-black text-[#29352F]">
-                {myClaimedRuns.length}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E6EAE7] flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#EAF3FF] border border-[#BFDBFE] text-[#1E40AF] flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-[#6B756F]">
-                Meals Distributed
-              </span>
-              <div className="font-heading text-2xl font-black text-[#29352F]">
-                ~125
-                <span className="text-xs font-normal text-[#6B756F] ml-1">people fed</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4"><DashboardMetric label="Available Nearby" value={<>{availableDonations.length}<span className="ml-1 text-xs font-medium text-[#6B756F]">listings</span></>} icon={<HeartHandshake className="w-5 h-5" />} tone="green" /><DashboardMetric label="Active Runs" value={myClaimedRuns.length} icon={<Bike className="w-5 h-5" />} tone="orange" /><DashboardMetric label="Meals Distributed" value={<>{peopleDistributed}<span className="ml-1 text-xs font-medium text-[#6B756F]">people</span></>} icon={<Users className="w-5 h-5" />} tone="blue" /></div>
 
         {/* 4. Tab Navigation */}
         <div className="flex items-center gap-2 border-b border-[#E6EAE7] pt-2">
@@ -325,10 +311,9 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
         {/* 5. TAB A: Available Food Near You */}
         {activeTab === 'available' && (
           <div className="space-y-4">
-            {/* Search & Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#FAFAFA] border border-[#E6EAE7]">
-              {/* Search input */}
-              <div className="relative flex-1">
+            {/* Search Bar */}
+            <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E6EAE7]">
+              <div className="relative">
                 <Search className="w-3.5 h-3.5 text-[#6B756F] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -337,44 +322,6 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                   placeholder="Filter by locality or food item (e.g. Indiranagar, Biryani)..."
                   className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
                 />
-              </div>
-
-              {/* Food Type Buttons */}
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {(['all', 'veg', 'vegan', 'non_veg'] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFoodTypeFilter(type)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-                      foodTypeFilter === type
-                        ? 'bg-[#29352F] text-white border-[#29352F]'
-                        : 'bg-white text-[#6B756F] border-[#E6EAE7] hover:bg-neutral-50'
-                    }`}
-                  >
-                    {type === 'all'
-                      ? 'All'
-                      : type === 'veg'
-                      ? 'Pure Veg'
-                      : type === 'vegan'
-                      ? 'Vegan'
-                      : 'Non-Veg'}
-                  </button>
-                ))}
-
-                {/* Urgency Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setUrgencyFilter(!urgencyFilter)}
-                  className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-                    urgencyFilter
-                      ? 'bg-[#FFF0DB] text-[#9A3412] border-[#FFE0B2]'
-                      : 'bg-white text-[#6B756F] border-[#E6EAE7] hover:bg-neutral-50'
-                  }`}
-                >
-                  <Flame className="w-3.5 h-3.5 text-[#C25E00]" />
-                  <span>Expiring Soon</span>
-                </button>
               </div>
             </div>
 
@@ -391,26 +338,37 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                   No matching surplus food listings found
                 </h3>
                 <p className="text-xs text-[#6B756F] mt-1">
-                  Try adjusting your locality search or removing food category filters.
+                  Try adjusting your locality search.
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {filteredAvailable.map((donation) => {
+                  const now = Date.now()
                   const remainingMinutes = Math.max(
                     0,
                     Math.round(
-                      (new Date(donation.earliestSafeUntil).getTime() - currentTime) / (1000 * 60)
+                      (new Date(donation.earliestSafeUntil).getTime() - now) / (1000 * 60)
                     )
                   )
                   const remainingHours = Math.floor(remainingMinutes / 60)
                   const remainingMins = remainingMinutes % 60
                   const isUrgent = remainingMinutes <= 120 // less than 2 hours
 
+                  const distKm =
+                    userLocation && donation.collectionAddress.latitude && donation.collectionAddress.longitude
+                      ? calculateDistanceKm(
+                          userLocation.latitude,
+                          userLocation.longitude,
+                          donation.collectionAddress.latitude,
+                          donation.collectionAddress.longitude
+                        )
+                      : null
+
                   return (
                     <div
                       key={donation.id}
-                      className="rounded-2xl border border-[#E6EAE7] bg-white p-5 shadow-2xs hover:border-[#29352F]/40 transition-all flex flex-col justify-between space-y-4"
+                      className="rounded-2xl border border-[#E6EAE7] bg-white p-4 sm:p-5 shadow-2xs hover:border-[#29352F]/40 transition-all flex flex-col justify-between space-y-3.5"
                     >
                       <div className="space-y-3">
                         {/* Top: Header Badges & Donor Locality */}
@@ -426,8 +384,15 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
 
                             {isUrgent && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9A3412] bg-[#FFF0DB] px-1.5 py-0.5 rounded border border-[#FFE0B2]">
-                                <Flame className="w-3 h-3 text-[#C25E00]" />
+                                <Clock className="w-3 h-3 text-[#C25E00]" />
                                 Urgent
+                              </span>
+                            )}
+
+                            {distKm !== null && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B5E20] bg-[#E8F5E9] px-2 py-0.5 rounded-md border border-[#C8E6C9]">
+                                <MapPin className="w-3 h-3 text-[#1B5E20]" />
+                                {distKm < 1 ? `${Math.round(distKm * 1000)}m away` : `${distKm.toFixed(1)} km away`}
                               </span>
                             )}
 
@@ -436,15 +401,11 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                             </span>
                           </div>
 
-                          <div className="inline-flex items-center gap-1 text-xs font-bold text-[#29352F] bg-[#FAFAFA] px-2.5 py-1 rounded-lg border border-[#E6EAE7]">
-                            <Users className="w-3.5 h-3.5 text-[#1B5E20]" />
-                            <span>~{donation.estimatedPeopleServed} People Served</span>
-                          </div>
                         </div>
 
                         {/* Separate Deadlines: Freshness vs Collection */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7] text-xs">
-                          <div className="flex items-start gap-1.5">
+                        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[1fr_1fr_0.8fr]">
+                          <div className="flex items-start gap-2.5 rounded-xl border border-[#C8E6C9] bg-[#E8F5E9]/65 p-3.5 text-sm">
                             <Clock className="w-3.5 h-3.5 text-[#1B5E20] shrink-0 mt-0.5" />
                             <div>
                               <span className="text-[10px] uppercase font-bold text-[#6B756F] block">
@@ -463,7 +424,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                             </div>
                           </div>
 
-                          <div className="flex items-start gap-1.5">
+                          <div className="flex items-start gap-2.5 rounded-xl border border-[#FFE0B2] bg-[#FFF0DB]/70 p-3.5 text-sm">
                             <Clock className="w-3.5 h-3.5 text-[#C25E00] shrink-0 mt-0.5" />
                             <div>
                               <span className="text-[10px] uppercase font-bold text-[#6B756F] block">
@@ -482,10 +443,25 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                               </span>
                             </div>
                           </div>
+                          <div className="flex items-center gap-3 rounded-xl border border-[#D7E7FF] bg-[#EAF3FF] px-4 py-3.5 text-sm">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#F05A19] shadow-2xs"><Users className="h-5 w-5" /></div>
+                            <div><span className="block text-xs text-[#536058]">Suitable for approximately</span><strong className="text-lg text-[#29352F]">{donation.estimatedPeopleServed} people</strong></div>
+                          </div>
                         </div>
 
+                        {/* Donor-selected food categories */}
+                        {donationCategoryLabels(donation).length > 0 && (
+                          <div className="pt-1">
+                            <span className="text-[11px] font-bold text-[#6B756F] uppercase tracking-wider block mb-1.5">Food Categories</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {donationCategoryLabels(donation).map((label) => <span key={label} className="inline-flex rounded-full border border-[#C8E6C9] bg-[#E8F5E9] px-2.5 py-1 text-xs font-semibold text-[#1B5E20]">{label}</span>)}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Complete Food Items & Quantities Table */}
-                        <div className="pt-1">
+                        <div className="grid grid-cols-1 gap-3 pt-1 lg:grid-cols-[minmax(0,2fr)_minmax(240px,0.8fr)]">
+                          <div>
                           <span className="text-[11px] font-bold text-[#6B756F] uppercase tracking-wider block mb-1.5">
                             Food Items ({donation.items.length})
                           </span>
@@ -494,33 +470,34 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                             fallbackPhoto={donation.photos[0]}
                             defaultSafeUntil={donation.earliestSafeUntil}
                           />
-                        </div>
-
-                        {/* Masked Pickup Locality & Privacy Notice */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs pt-1">
-                          <div className="flex items-center gap-1.5 text-[#6B756F]">
-                            <MapPin className="w-3.5 h-3.5 text-[#C25E00] shrink-0" />
-                            <span className="font-semibold text-[#29352F]">
-                              Pickup Area: {donation.collectionAddress.areaLocality},{' '}
-                              {donation.collectionAddress.city}
-                            </span>
                           </div>
-
-                          <span className="text-[11px] text-[#6B756F] italic">
-                            Exact street address & donor phone unlock upon claiming.
-                          </span>
+                        <div className="flex items-start gap-3 rounded-xl border border-[#FFE0B2] bg-[#FFF0DB]/65 px-4 py-3.5 text-sm text-[#536058]">
+                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#C25E00]" />
+                          <span className="leading-6"><strong className="block text-[#29352F]">Pickup Address</strong>{donation.collectionAddress.areaLocality}, {donation.collectionAddress.city}<span className="block text-xs italic text-[#6B756F]">Full address unlocks after claiming</span></span>
+                        </div>
                         </div>
                       </div>
 
-                      {/* Primary Claim Action */}
-                      <button
-                        type="button"
-                        onClick={() => setClaimModalDonation(donation)}
-                        className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-                      >
-                        <HeartHandshake className="w-4 h-4" />
-                        <span>Claim Food Pickup</span>
-                      </button>
+                      {/* Actions: View Details & Claim Food Pickup */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setViewDetailsDonation(donation)}
+                          className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-[#29352F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-[#6B756F]" />
+                          <span>View Details</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setClaimModalDonation(donation)}
+                          className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                        >
+                          <HeartHandshake className="w-4 h-4" />
+                          <span>Claim Food Pickup</span>
+                        </button>
+                      </div>
                     </div>
                   )
                 })}
@@ -556,7 +533,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                 {myClaimedRuns.map((donation) => (
                   <div
                     key={donation.id}
-                    className="p-5 rounded-2xl border border-[#E6EAE7] bg-white shadow-2xs space-y-3"
+                    className="p-4 sm:p-5 rounded-2xl border border-[#E6EAE7] bg-white shadow-2xs space-y-3"
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[#E6EAE7] pb-2">
                       <div className="flex items-center gap-2">
@@ -566,14 +543,32 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => onOpenTracker(donation.id)}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                      >
-                        <Bike className="w-3.5 h-3.5" />
-                        <span>Live Pickup Tracker</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={
+                            donation.collectionAddress.latitude && donation.collectionAddress.longitude
+                              ? `https://www.google.com/maps/dir/?api=1&destination=${donation.collectionAddress.latitude},${donation.collectionAddress.longitude}`
+                              : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                                  `${donation.collectionAddress.addressLine1}, ${donation.collectionAddress.areaLocality}, ${donation.collectionAddress.city}`
+                                )}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#29352F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <Navigation className="w-3.5 h-3.5 text-[#1B5E20]" />
+                          <span>Navigate</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => onOpenTracker(donation.id)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Bike className="w-3.5 h-3.5" />
+                          <span>Live Pickup Tracker</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Unlocked Collection Address */}
@@ -602,7 +597,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                     {/* Food Items Table */}
                     <div className="pt-1">
                       <span className="text-[11px] font-bold text-[#6B756F] uppercase tracking-wider block mb-1">
-                        Claimed Items ({donation.items.length}) • ~{donation.estimatedPeopleServed} people served
+                        Claimed Items ({donation.items.length})
                       </span>
                       <FoodItemsTable
                         items={donation.items}
@@ -636,7 +631,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                         Delivered Run #{donation.id.slice(0, 10)}
                       </span>
                       <p className="text-[#6B756F]">
-                        {donation.totalQuantityLabel} • ~{donation.estimatedPeopleServed} meals distributed
+                        {donation.totalQuantityLabel}
                       </p>
                     </div>
                     <span className="text-[11px] text-[#1B5E20] font-bold bg-[#E8F5E9] px-2.5 py-1 rounded-md border border-[#C8E6C9]">
@@ -657,6 +652,129 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
           </div>
         )}
       </main>
+
+      {/* Read-Only View Details Modal */}
+      {viewDetailsDonation && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-2xs flex items-center justify-center p-4"
+          onClick={() => setViewDetailsDonation(null)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-[#E6EAE7] shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#E6EAE7]">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B5E20] bg-[#E8F5E9] px-2 py-0.5 rounded-md border border-[#C8E6C9]">
+                  {viewDetailsDonation.donorType === 'restaurant'
+                    ? 'Restaurant'
+                    : viewDetailsDonation.donorType === 'function_event'
+                    ? 'Event Banquet'
+                    : 'Food Donor'}
+                </span>
+                <h3 className="font-heading font-bold text-base text-[#29352F] mt-1">
+                  Donation #{viewDetailsDonation.id.slice(0, 10)}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewDetailsDonation(null)}
+                className="w-8 h-8 rounded-full border border-[#E6EAE7] flex items-center justify-center text-[#6B756F] hover:text-[#29352F] hover:bg-neutral-50 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Deadlines */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7]">
+                <span className="text-[10px] uppercase font-bold text-[#6B756F] block">
+                  Food Freshness
+                </span>
+                <span className="font-semibold text-[#29352F]">
+                  Safe until:{' '}
+                  {new Date(viewDetailsDonation.earliestSafeUntil).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7]">
+                <span className="text-[10px] uppercase font-bold text-[#6B756F] block">
+                  Pickup Deadline
+                </span>
+                <span className="font-semibold text-[#29352F]">
+                  Collect by:{' '}
+                  {new Date(viewDetailsDonation.pickupSchedule.deadlineTime).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            </div>
+
+            {/* Food items table */}
+            {donationCategoryLabels(viewDetailsDonation).length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold text-[#6B756F] uppercase tracking-wider block mb-1.5">Food Categories</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {donationCategoryLabels(viewDetailsDonation).map((label) => <span key={label} className="inline-flex rounded-full border border-[#C8E6C9] bg-[#E8F5E9] px-2.5 py-1 text-xs font-semibold text-[#1B5E20]">{label}</span>)}
+                </div>
+              </div>
+            )}
+
+            {/* Food items table */}
+            <div>
+              <span className="text-[11px] font-bold text-[#6B756F] uppercase tracking-wider block mb-1.5">
+                Itemized Food Breakdown ({viewDetailsDonation.items.length})
+              </span>
+              <FoodItemsTable
+                items={viewDetailsDonation.items}
+                fallbackPhoto={viewDetailsDonation.photos[0]}
+                defaultSafeUntil={viewDetailsDonation.earliestSafeUntil}
+              />
+            </div>
+
+            {/* Area notice */}
+            <div className="flex items-center gap-1.5 text-xs text-[#6B756F] p-2.5 rounded-xl bg-[#FFF0DB]/60 border border-[#FFE0B2]">
+              <MapPin className="w-4 h-4 text-[#C25E00] shrink-0" />
+              <span>
+                <strong>Pickup Locality:</strong> {viewDetailsDonation.collectionAddress.areaLocality},{' '}
+                {viewDetailsDonation.collectionAddress.city}. Exact street details unlock after claiming.
+              </span>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E6EAE7]">
+              <button
+                type="button"
+                onClick={() => setViewDetailsDonation(null)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-[#6B756F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewDetailsDonation
+                  setViewDetailsDonation(null)
+                  setClaimModalDonation(target)
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-[#29352F] hover:bg-[#1B231F] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <HeartHandshake className="w-4 h-4" />
+                <span>Claim Food Pickup</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Claim Confirmation Modal */}
       {claimModalDonation && (

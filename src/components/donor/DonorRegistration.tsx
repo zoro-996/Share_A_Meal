@@ -1,276 +1,159 @@
 import React, { useState } from 'react'
 import { RegistrationLayout } from '../common/RegistrationLayout'
 import { FormField } from '../common/FormField'
-import { PhoneNumberInput } from '../common/PhoneNumberInput'
+import { PhoneEmailVerification } from '../common/PhoneEmailVerification'
 import { IdentityDocumentUploader } from '../common/IdentityDocumentUploader'
-import { CollectionLocationMap } from './CollectionLocationMap'
-import { OTPVerification } from '../common/OTPVerification'
-import { RegistrationStatus } from '../common/RegistrationStatus'
+import { AccountabilityChecklist } from '../common/AccountabilityChecklist'
 import type { 
   CountryCode, 
   FoodSourceType, 
   IdentityDocumentType, 
   UploadedDocument, 
   RegistrationRecord,
-  DonorCollectionAddress,
-  OTPVerificationProof
 } from '../../types/registration'
-import { getDeviceCoordinates, reverseGeocodeCoordinates } from '../../services/geocodingService'
-import { requestOTPSend, DEMO_SKIP_OTP } from '../../services/otpService'
-import { saveCurrentDonor, setActiveRole } from '../../services/donationService'
+import { saveCurrentDonor, setActiveRole, updateDonorProfile } from '../../services/donationService'
+import { registerUser } from '../../services/authService'
+import { useNavigation } from '../../context/useNavigation'
 import { 
   ArrowRight, 
+  ArrowLeft,
   Utensils, 
   Home, 
+  Building2,
   Calendar, 
-  PlusCircle, 
-  MapPin, 
+  Sparkles,
   RefreshCw, 
   AlertCircle, 
   CheckCircle2, 
-  AlertTriangle 
+  X,
+  ShieldCheck,
+  Building
 } from 'lucide-react'
 
-export const DonorRegistration: React.FC = () => {
+interface DonorRegistrationProps {
+  onAuthenticated?: () => Promise<unknown>
+}
+
+export const DonorRegistration: React.FC<DonorRegistrationProps> = ({ onAuthenticated }) => {
+  const { navigate } = useNavigation()
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
 
-  // Form State: Basic details
+  // Step 1: Personal Details & ID Proof
   const [fullName, setFullName] = useState('')
   const [countryCode, setCountryCode] = useState<CountryCode>('+91')
   const [phoneNumber, setPhoneNumber] = useState('')
+  const [phoneVerified, setPhoneVerified] = useState(false)
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [identityDocType, setIdentityDocType] = useState<IdentityDocumentType>('aadhaar')
+  const [document, setDocument] = useState<UploadedDocument | null>(null)
+
+  // Step 2A: Food Source
   const [foodSourceType, setFoodSourceType] = useState<FoodSourceType>('restaurant')
   const [customFoodSource, setCustomFoodSource] = useState('')
+  const [showOtherModal, setShowOtherModal] = useState(false)
+  const [tempOtherText, setTempOtherText] = useState('')
 
-  // Form State: Collection Address
+  // Step 2B: Donor Address
   const [addressLine1, setAddressLine1] = useState('')
-  const [addressLine2, setAddressLine2] = useState('')
   const [areaLocality, setAreaLocality] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [pincode, setPincode] = useState('')
   const [landmark, setLandmark] = useState('')
-  const [additionalDirections, setAdditionalDirections] = useState('')
+  const [latitude] = useState<number | null>(null)
+  const [longitude] = useState<number | null>(null)
 
-  // Form State: Map Pin Coordinates
-  const [latitude, setLatitude] = useState<number | null>(28.6139)
-  const [longitude, setLongitude] = useState<number | null>(77.2090)
+  const [addressNotice, setAddressNotice] = useState<string | null>(null)
 
-  // Form State: Identity Document & Consent
-  const [identityDocType, setIdentityDocType] = useState<IdentityDocumentType>('aadhaar')
-  const [document, setDocument] = useState<UploadedDocument | null>(null)
-  const [consentGiven, setConsentGiven] = useState(false)
+  // Step 3: Terms & Conditions Checkboxes
+  const [donorTerms, setDonorTerms] = useState<boolean[]>(() => Array(7).fill(false))
+  const updateDonorTerm = (index: number, checked: boolean) => setDonorTerms((terms) => terms.map((term, itemIndex) => itemIndex === index ? checked : term))
 
-  // Location Autofill State
-  const [isAutofillingLocation, setIsAutofillingLocation] = useState(false)
-  const [locationNotice, setLocationNotice] = useState<{
-    type: 'success' | 'warning' | 'error'
-    message: string
-  } | null>(null)
-
-  // Submission & SMS State
+  // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [verificationId, setVerificationId] = useState<string | undefined>()
-
-  // Validation States
-  const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
-
-  // Completed Record
+  const [isCompleted, setIsCompleted] = useState(false)
   const [completedRecord, setCompletedRecord] = useState<RegistrationRecord | null>(null)
 
-  // Current-location action for Address Line 1
-  const handleAutofillCurrentLocation = async () => {
-    setIsAutofillingLocation(true)
-    setLocationNotice(null)
+  // Validation States
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
 
-    try {
-      const coords = await getDeviceCoordinates()
-      setLatitude(coords.latitude)
-      setLongitude(coords.longitude)
 
-      const result = await reverseGeocodeCoordinates(coords.latitude, coords.longitude)
-
-      // Autofill fields without overwriting user data with empty strings
-      if (result.addressLine1) {
-        setAddressLine1(result.addressLine1)
-        setFormErrors((prev) => ({ ...prev, addressLine1: '' }))
-      }
-      if (result.areaLocality) {
-        setAreaLocality(result.areaLocality)
-        setFormErrors((prev) => ({ ...prev, areaLocality: '' }))
-      }
-      if (result.city) {
-        setCity(result.city)
-        setFormErrors((prev) => ({ ...prev, city: '' }))
-      }
-      if (result.state) {
-        setState(result.state)
-        setFormErrors((prev) => ({ ...prev, state: '' }))
-      }
-      if (result.pincode) {
-        setPincode(result.pincode)
-        setFormErrors((prev) => ({ ...prev, pincode: '' }))
-      }
-      if (result.landmark) {
-        setLandmark(result.landmark)
-        setFormErrors((prev) => ({ ...prev, landmark: '' }))
-      }
-
-      // Clear coordinate error if any
-      setFormErrors((prev) => ({ ...prev, coordinates: '' }))
-
-      if (result.unresolvedFields && result.unresolvedFields.length > 0) {
-        setLocationNotice({
-          type: 'warning',
-          message: `Address components autofilled from GPS. Please manually enter the missing required fields: ${result.unresolvedFields.join(
-            ', '
-          )}. (Address Line 2 is optional).`,
-        })
-      } else {
-        setLocationNotice({
-          type: 'success',
-          message: 'Address autofilled from your current location. Please verify details before continuing.',
-        })
-      }
-    } catch (err) {
-      setLocationNotice({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Unable to determine current location. Please enter manually.',
-      })
-    } finally {
-      setIsAutofillingLocation(false)
-    }
-  }
-
-  const validate = (): boolean => {
+  // Step 1 Validation
+  const validateStep1 = (): boolean => {
     const errors: Record<string, string> = {}
-
     if (!fullName.trim()) {
       errors.fullName = 'Full name is required.'
     } else if (fullName.trim().length < 2) {
-      errors.fullName = 'Please enter a valid full name (at least 2 characters).'
+      errors.fullName = 'Please enter a valid full name.'
     }
 
-    if (!phoneNumber) {
-      errors.phoneNumber = 'Phone number is required.'
-    } else if (countryCode === '+91' && phoneNumber.length !== 10) {
-      errors.phoneNumber = 'Please enter a valid 10-digit Indian mobile number.'
-    } else if (phoneNumber.length < 8) {
-      errors.phoneNumber = 'Please enter a valid mobile number.'
-    }
+    if (!phoneVerified || !phoneNumber) errors.phoneNumber = 'Please verify your mobile number to continue.'
 
-    if (foodSourceType === 'other' && !customFoodSource.trim()) {
-      errors.customFoodSource = 'Please specify your food source description.'
-    }
-
-    // Address Validations
-    if (!addressLine1.trim()) {
-      errors.addressLine1 = 'Address Line 1 is required.'
-    }
-    if (!areaLocality.trim()) {
-      errors.areaLocality = 'Area / Locality is required.'
-    }
-    if (!city.trim()) {
-      errors.city = 'City is required.'
-    }
-    if (!state.trim()) {
-      errors.state = 'State is required.'
-    }
-    if (!pincode.trim()) {
-      errors.pincode = 'PIN Code is required.'
-    } else if (!/^\d{6}$/.test(pincode.trim())) {
-      errors.pincode = 'Please enter a valid 6-digit Indian PIN Code.'
-    }
-    if (!landmark.trim()) {
-      errors.landmark = 'A prominent landmark is required for volunteer pickup guidance.'
-    }
-
-    if (latitude === null || longitude === null) {
-      errors.coordinates = 'Please select a location pin on the map.'
-    }
-
-    if (!document || document.status !== 'completed') {
-      errors.document = 'Please upload an accepted identity document to verify food donor ownership.'
-    }
-
-    if (!consentGiven) {
-      errors.consent = 'You must review and agree to the privacy and food donation safety consent.'
+    if (password.length < 8) {
+      errors.password = 'Password must be at least 8 characters.'
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match.'
     }
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
-  const buildCollectionAddress = (): DonorCollectionAddress => ({
-    addressLine1: addressLine1.trim(),
-    addressLine2: addressLine2.trim() || undefined,
-    areaLocality: areaLocality.trim(),
-    city: city.trim(),
-    state: state.trim(),
-    pincode: pincode.trim(),
-    landmark: landmark.trim(),
-    additionalDirections: additionalDirections.trim() || undefined,
-    latitude,
-    longitude,
-  })
+  // Step 2 Validation
+  const validateStep2 = (): boolean => {
+    const errors: Record<string, string> = {}
 
-  // Request real SMS verification before advancing to Step 2
-  const handleSubmit = async (e: React.FormEvent) => {
+    if (foodSourceType === 'other' && !customFoodSource.trim()) {
+      errors.foodSource = 'Please specify your custom food source.'
+    }
+
+    if (!addressLine1.trim()) errors.addressLine1 = 'Address Line 1 is required.'
+    if (!areaLocality.trim()) errors.areaLocality = 'Area / Locality is required.'
+    if (!city.trim()) errors.city = 'City is required.'
+    if (!state.trim()) errors.state = 'State is required.'
+    if (!pincode.trim()) {
+      errors.pincode = 'PIN code is required.'
+    } else if (!/^\d{6}$/.test(pincode.trim())) {
+      errors.pincode = 'Please enter a valid 6-digit PIN code.'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleNextStep1 = (e: React.FormEvent) => {
+    e.preventDefault()
+    setTouched({ fullName: true, phoneNumber: true, password: true, confirmPassword: true })
+    if (validateStep1()) {
+      setCurrentStep(2)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  const handleNextStep2 = (e: React.FormEvent) => {
     e.preventDefault()
     setTouched({
-      fullName: true,
-      phoneNumber: true,
-      customFoodSource: true,
       addressLine1: true,
       areaLocality: true,
       city: true,
       state: true,
       pincode: true,
-      landmark: true,
-      document: true,
-      consent: true,
+      foodSource: true,
     })
-
-    if (!validate()) {
-      return
-    }
-
-    // TEMPORARY HACKATHON DEMO MODE: Bypass phone OTP screen and proceed directly to Status step
-    if (DEMO_SKIP_OTP) {
-      const address = buildCollectionAddress()
-      const record: RegistrationRecord = {
-        id: `donor_${Date.now()}`,
-        role: 'donor',
-        fullName: fullName.trim(),
-        phoneNumber,
-        countryCode,
-        phoneVerified: false, // Explicitly unverified in demo mode
-        verificationProof: undefined, // No fake proof generated
-        documentType: identityDocType,
-        documentReference: document?.privateReferenceId || 'ref_pending',
-        documentStatus: 'pending_review',
-        overallStatus: 'pending_verification',
-        demoMode: true,
-        createdAt: new Date().toISOString(),
-        details: {
-          foodSourceType,
-          customFoodSource: foodSourceType === 'other' ? customFoodSource.trim() : undefined,
-          collectionAddress: address,
-        },
-      }
-
-      setCompletedRecord(record)
-      const donorData = {
-        id: record.id,
-        name: fullName.trim(),
-        phone: phoneNumber,
-        donorType: foodSourceType,
-        collectionAddress: address,
-      }
-      saveCurrentDonor(donorData)
-      setActiveRole('donor')
+    if (validateStep2()) {
+      setAddressNotice('Address saved successfully.')
       setCurrentStep(3)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  const handleFinalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!donorTerms.every(Boolean)) {
+      setSubmitError('Please accept every required donor term to complete registration.')
       return
     }
 
@@ -278,56 +161,188 @@ export const DonorRegistration: React.FC = () => {
     setSubmitError(null)
 
     try {
-      const response = await requestOTPSend(countryCode, phoneNumber)
-      if (response.success) {
-        setVerificationId(response.verificationId)
-        setCurrentStep(2)
-      } else {
-        setSubmitError(
-          response.error || 'Failed to initiate SMS verification. Please check the phone number or provider configuration.'
-        )
+      const authenticated = await registerUser({
+        role: 'donor',
+        countryCode,
+        phone: phoneNumber,
+        password,
+        details: {
+          fullName: fullName.trim(),
+          donorType: foodSourceType,
+          customFoodSource: foodSourceType === 'other' ? customFoodSource.trim() : undefined,
+          documentType: identityDocType,
+          documentReference: document?.privateReferenceId,
+          donorTermsAccepted: donorTerms,
+          donorTermsAcceptedAt: new Date().toISOString(),
+          collectionAddress: {
+            addressLine1: addressLine1.trim(), areaLocality: areaLocality.trim(), city: city.trim(), state: state.trim(), pincode: pincode.trim(), landmark: landmark.trim(), latitude: latitude || 12.9784, longitude: longitude || 77.6408,
+          },
+        },
+      })
+      if (!authenticated || authenticated.role !== 'donor') throw new Error('Your donor profile could not be created.')
+      const donorRecordId = authenticated.profile.id
+      const record: RegistrationRecord = {
+        id: donorRecordId,
+        role: 'donor',
+        fullName: fullName.trim(),
+        phoneNumber,
+        countryCode,
+        phoneVerified: true,
+        documentType: identityDocType,
+        documentReference: document?.privateReferenceId,
+        documentStatus: document ? 'pending_review' : undefined,
+        overallStatus: 'pending_verification',
+        createdAt: new Date().toISOString(),
+        details: {
+          foodSourceType,
+          customFoodSource: foodSourceType === 'other' ? customFoodSource.trim() : undefined,
+          collectionAddress: {
+            addressLine1: addressLine1.trim(),
+            areaLocality: areaLocality.trim(),
+            city: city.trim(),
+            state: state.trim(),
+            pincode: pincode.trim(),
+            landmark: landmark.trim(),
+            latitude: latitude || 12.9784,
+            longitude: longitude || 77.6408,
+          },
+        },
       }
+
+      // Persist to local session and backend API
+      saveCurrentDonor({
+        id: donorRecordId,
+        name: fullName.trim(),
+        phone: phoneNumber,
+        donorType: foodSourceType,
+        collectionAddress: {
+          addressLine1: addressLine1.trim(),
+          areaLocality: areaLocality.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          pincode: pincode.trim(),
+          landmark: landmark.trim(),
+          latitude: latitude || 12.9784,
+          longitude: longitude || 77.6408,
+        },
+      })
+      setActiveRole('donor')
+
+      // Save to backend endpoint
+      await updateDonorProfile({
+        id: donorRecordId,
+        name: fullName.trim(),
+        phone: phoneNumber,
+        donorType: foodSourceType,
+        collectionAddress: {
+          addressLine1: addressLine1.trim(),
+          areaLocality: areaLocality.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          pincode: pincode.trim(),
+          landmark: landmark.trim(),
+          latitude: latitude || 12.9784,
+          longitude: longitude || 77.6408,
+        },
+      })
+
+      setCompletedRecord(record)
+      setIsCompleted(true)
+      await onAuthenticated?.()
+      navigate('/donor/dashboard')
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Network error requesting verification code.')
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save registration. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleOtpVerified = (proof: OTPVerificationProof) => {
-    const address = buildCollectionAddress()
+  // FOOD SOURCE OPTIONS
+  const FOOD_SOURCES: Array<{ id: FoodSourceType; label: string; icon: React.ReactNode; desc: string }> = [
+    { id: 'restaurant', label: 'Restaurant', icon: <Utensils className="w-5 h-5" />, desc: 'Eateries, cafes & commercial kitchens' },
+    { id: 'hotel', label: 'Hotel', icon: <Building className="w-5 h-5" />, desc: 'Buffets, banquets & room service' },
+    { id: 'home', label: 'Home', icon: <Home className="w-5 h-5" />, desc: 'Home-cooked meals & household surplus' },
+    { id: 'catering', label: 'Catering', icon: <Building2 className="w-5 h-5" />, desc: 'Corporate catering & party orders' },
+    { id: 'function_event', label: 'Function / Event', icon: <Calendar className="w-5 h-5" />, desc: 'Weddings, conventions & large celebrations' },
+    { id: 'other', label: 'Other', icon: <Sparkles className="w-5 h-5" />, desc: 'Community halls, bakeries or custom facilities' },
+  ]
 
-    const record: RegistrationRecord = {
-      id: `donor_${Date.now()}`,
-      role: 'donor',
-      fullName: fullName.trim(),
-      phoneNumber,
-      countryCode,
-      phoneVerified: true,
-      verificationProof: proof,
-      documentType: identityDocType,
-      documentReference: document?.privateReferenceId || 'ref_pending',
-      documentStatus: 'pending_review',
-      overallStatus: 'pending_verification',
-      createdAt: new Date().toISOString(),
-      details: {
-        foodSourceType,
-        customFoodSource: foodSourceType === 'other' ? customFoodSource.trim() : undefined,
-        collectionAddress: address,
-      },
-    }
+  // Render Completion Screen if finished
+  if (isCompleted && completedRecord) {
+    const address = completedRecord.details.collectionAddress!
+    const sourceLabel = completedRecord.details.foodSourceType === 'other' && completedRecord.details.customFoodSource
+      ? `Other (${completedRecord.details.customFoodSource})`
+      : completedRecord.details.foodSourceType?.replace('_', ' ').toUpperCase()
 
-    setCompletedRecord(record)
-    const donorData = {
-      id: record.id,
-      name: fullName.trim(),
-      phone: phoneNumber,
-      donorType: foodSourceType,
-      collectionAddress: address,
-    }
-    saveCurrentDonor(donorData)
-    setActiveRole('donor')
-    setCurrentStep(3)
+    return (
+      <RegistrationLayout
+        role="donor"
+        title="Registration Completed"
+        subtitle="Your donor profile has been created and verified on the Share a Meal network."
+        currentStep={3}
+      >
+        <div className="space-y-6">
+          <div className="p-4 rounded-2xl bg-[#E8F5E9] border border-[#C8E6C9] flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-[#1B5E20] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-heading font-extrabold text-base text-[#1B5E20]">
+                Registration Successfully Saved!
+              </h2>
+              <p className="text-xs text-[#29352F] mt-0.5">
+                Thank you for joining our mission to ensure no good food goes to waste. Please review your registered details below.
+              </p>
+            </div>
+          </div>
+
+          {/* Saved Summary Details */}
+          <div className="rounded-2xl border border-[#E6EAE7] bg-[#FAFAFA] p-5 space-y-4 text-xs">
+            <h3 className="font-heading font-bold text-xs uppercase tracking-wider text-[#6B756F]">
+              Saved Donor Profile Information
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="text-[11px] text-[#6B756F] block">Full Name</span>
+                <span className="font-bold text-sm text-[#29352F]">{completedRecord.fullName}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#6B756F] block">Mobile Phone</span>
+                <span className="font-bold text-sm text-[#29352F]">{completedRecord.countryCode} {completedRecord.phoneNumber}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#6B756F] block">Food Source</span>
+                <span className="font-bold text-sm text-[#1B5E20] capitalize">{sourceLabel}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#6B756F] block">Identity Document</span>
+                <span className="font-semibold text-xs text-[#29352F] capitalize">{completedRecord.documentType} ({completedRecord.documentReference})</span>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[#E6EAE7]">
+              <span className="text-[11px] text-[#6B756F] block mb-1">Registered Donor Address</span>
+              <p className="font-medium text-[#29352F] leading-relaxed">
+                {address.addressLine1}, {address.areaLocality}, {address.city}, {address.state} - {address.pincode}
+                {address.landmark && <span className="block text-[#6B756F] text-[11px] mt-0.5">Landmark: {address.landmark}</span>}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => navigate('/donor/dashboard')}
+              className="w-full py-3.5 px-6 rounded-xl bg-[#1E824C] hover:bg-[#166B3D] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <span>Go to Donor Portal</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </RegistrationLayout>
+    )
   }
 
   return (
@@ -335,502 +350,431 @@ export const DonorRegistration: React.FC = () => {
       role="donor"
       title={
         currentStep === 1
-          ? 'Register as a Food Donor'
+          ? 'Personal Details & Password'
           : currentStep === 2
-          ? 'Verify Your Phone Number'
-          : 'Food Donor Registration Received'
+          ? 'Food Source & Donor Address'
+          : 'Terms & Conditions'
       }
       subtitle={
         currentStep === 1
-          ? 'Tell us about your food source and where volunteers can collect surplus food.'
+          ? 'Step 1 of 3: Provide your contact information and create a password.'
           : currentStep === 2
-          ? 'Enter the one-time password sent to your phone to complete phone verification.'
-          : completedRecord?.phoneVerified
-          ? 'Your phone number has been verified and your collection hub is saved.'
-          : 'Your food donor details and collection hub have been received for review (Demo Mode).'
+          ? 'Step 2 of 3: Select where surplus food originates and your collection address.'
+          : 'Step 3 of 3: Confirm your information accuracy and accept the platform terms.'
       }
       currentStep={currentStep}
-      onBack={currentStep === 2 ? () => setCurrentStep(1) : undefined}
+      onBack={() => {
+        if (currentStep === 3) setCurrentStep(2)
+        else if (currentStep === 2) setCurrentStep(1)
+        else navigate('/')
+      }}
     >
-      {/* STEP 1: Registration Form */}
+      {/* ======================================================== */}
+      {/* STEP 1: Personal Details & Identity Proof                */}
+      {/* ======================================================== */}
       {currentStep === 1 && (
-        <form onSubmit={handleSubmit} noValidate className="space-y-7">
-          {/* Hackathon Demo Notice */}
-          {DEMO_SKIP_OTP && (
-            <div className="p-3.5 rounded-xl bg-[#FFF0DB]/80 border border-[#FFE0B2] text-xs text-[#9A3412] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-bold px-1.5 py-0.5 rounded-md bg-[#FFE0B2] text-[10px] uppercase tracking-wide shrink-0">Demo Mode</span>
-                <span>Phone OTP verification is bypassed for demonstration. Fill required details and ID to continue directly to Status.</span>
-              </div>
-            </div>
-          )}
-          {/* Section A: Donor Contact Information */}
+        <form onSubmit={handleNextStep1} className="space-y-6">
           <div className="space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F]">
-              1. Contact Information
-            </h2>
-
-            {/* Field 1: Full Name */}
-            <FormField
-              id="donor-name"
-              label="Full Name"
-              required
-              error={touched.fullName ? formErrors.fullName : undefined}
-            >
+            <FormField label="Full Name" required error={touched.fullName ? formErrors.fullName : undefined}>
               <input
-                id="donor-name"
                 type="text"
-                autoComplete="name"
                 value={fullName}
-                onChange={(e) => {
-                  setFullName(e.target.value)
-                  if (touched.fullName) setFormErrors((prev) => ({ ...prev, fullName: '' }))
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, fullName: true }))
-                  if (!fullName.trim()) setFormErrors((prev) => ({ ...prev, fullName: 'Full name is required.' }))
-                }}
+                onChange={(e) => setFullName(e.target.value)}
                 placeholder="e.g. Ramesh Verma"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C] focus:ring-1 focus:ring-[#1E824C]"
+                required
               />
             </FormField>
 
-            {/* Field 2: Phone Number */}
-            <FormField
-              id="donor-phone"
-              label="Mobile Phone Number"
-              required
+            <PhoneEmailVerification
+              value={phoneVerified ? { countryCode, phoneNumber } : null}
               error={touched.phoneNumber ? formErrors.phoneNumber : undefined}
-            >
-              <PhoneNumberInput
-                id="donor-phone"
-                countryCode={countryCode}
-                onCountryCodeChange={setCountryCode}
-                phoneNumber={phoneNumber}
-                onPhoneNumberChange={(val) => {
-                  setPhoneNumber(val)
-                  if (touched.phoneNumber) setFormErrors((prev) => ({ ...prev, phoneNumber: '' }))
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, phoneNumber: true }))
-                  if (!phoneNumber) setFormErrors((prev) => ({ ...prev, phoneNumber: 'Phone number is required.' }))
-                }}
-                error={formErrors.phoneNumber}
-                hasInteracted={touched.phoneNumber}
-              />
-            </FormField>
-          </div>
-
-          {/* Section B: Food Source Type */}
-          <div className="space-y-4 pt-4 border-t border-[#E6EAE7]">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F]">
-              2. Food Source
-            </h2>
-
-            <FormField
-              id="food-source-type"
-              label="Where Does the Food Come From?"
-              required
-            >
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { id: 'restaurant', label: 'Restaurant', icon: Utensils },
-                  { id: 'home', label: 'Home', icon: Home },
-                  { id: 'function_event', label: 'Function / Event', icon: Calendar },
-                  { id: 'other', label: 'Other', icon: PlusCircle },
-                ].map((item) => {
-                  const Icon = item.icon
-                  const isSelected = foodSourceType === item.id
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setFoodSourceType(item.id as FoodSourceType)}
-                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-[#29352F] bg-[#FAFAFA] ring-1 ring-[#29352F] font-bold text-[#29352F]'
-                          : 'border-[#E6EAE7] bg-white hover:bg-neutral-50 text-[#6B756F]'
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 ${isSelected ? 'text-[#1B5E20]' : 'text-[#6B756F]'}`} />
-                      <span className="text-xs">{item.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </FormField>
-
-            {/* Conditional Field: Other Food Source Description */}
-            {foodSourceType === 'other' && (
-              <div className="p-4 rounded-xl bg-[#FFF0DB]/40 border border-[#FFE0B2]">
-                <FormField
-                  id="custom-food-source"
-                  label="Specify Your Food Source"
-                  required
-                  error={touched.customFoodSource ? formErrors.customFoodSource : undefined}
-                >
-                  <input
-                    id="custom-food-source"
-                    type="text"
-                    value={customFoodSource}
-                    onChange={(e) => {
-                      setCustomFoodSource(e.target.value)
-                      if (touched.customFoodSource) setFormErrors((prev) => ({ ...prev, customFoodSource: '' }))
-                    }}
-                    onBlur={() => {
-                      setTouched((prev) => ({ ...prev, customFoodSource: true }))
-                      if (!customFoodSource.trim()) {
-                        setFormErrors((prev) => ({ ...prev, customFoodSource: 'Please specify your food source description.' }))
-                      }
-                    }}
-                    placeholder="Enter type of food facility"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-                  />
-                </FormField>
-              </div>
-            )}
-          </div>
-
-          {/* Section C: Food Collection Location */}
-          <div className="space-y-4 pt-4 border-t border-[#E6EAE7]">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F]">
-                3. Food Collection Location
-              </h2>
-            </div>
-
-            {/* Location Autofill Banner Notice */}
-            {locationNotice && (
-              <div
-                role="status"
-                className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${
-                  locationNotice.type === 'success'
-                    ? 'bg-[#E8F5E9] border-[#C8E6C9] text-[#1B5E20]'
-                    : locationNotice.type === 'warning'
-                    ? 'bg-[#FFF0DB] border-[#FFE0B2] text-[#9A3412]'
-                    : 'bg-red-50 border-red-200 text-red-700'
-                }`}
-              >
-                {locationNotice.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
-                {locationNotice.type === 'warning' && <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
-                {locationNotice.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
-                <span className="leading-relaxed">{locationNotice.message}</span>
-              </div>
-            )}
-
-            {/* Address Line 1 with "Use My Current Location" button */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label htmlFor="addr-line1" className="text-sm font-semibold text-[#29352F]">
-                  Address Line 1 <span className="text-red-500">*</span>
-                </label>
-                {/* Clearly visible location-pin action button */}
-                <button
-                  type="button"
-                  onClick={handleAutofillCurrentLocation}
-                  disabled={isAutofillingLocation}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1B5E20] hover:text-[#2E7D32] bg-[#E8F5E9] hover:bg-[#D8ECD9] px-2.5 py-1.5 rounded-lg border border-[#C8E6C9] transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
-                  aria-label="Use My Current Location to autofill address"
-                >
-                  <MapPin className={`w-3.5 h-3.5 text-[#1B5E20] ${isAutofillingLocation ? 'animate-bounce' : ''}`} />
-                  <span>{isAutofillingLocation ? 'Detecting Location...' : 'Use My Current Location'}</span>
-                </button>
-              </div>
-
-              <input
-                id="addr-line1"
-                type="text"
-                autoComplete="address-line1"
-                value={addressLine1}
-                onChange={(e) => {
-                  setAddressLine1(e.target.value)
-                  if (touched.addressLine1) setFormErrors((prev) => ({ ...prev, addressLine1: '' }))
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, addressLine1: true }))
-                  if (!addressLine1.trim()) setFormErrors((prev) => ({ ...prev, addressLine1: 'Address Line 1 is required.' }))
-                }}
-                placeholder="e.g. Flat 402, Greenfield Apartments or Shop 12, Main Market"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-              />
-
-              {touched.addressLine1 && formErrors.addressLine1 && (
-                <div role="alert" className="flex items-center gap-1.5 text-xs text-red-600 font-medium">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{formErrors.addressLine1}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Address Line 2 (Strictly Optional) */}
-            <FormField
-              id="addr-line2"
-              label="Address Line 2 (Optional)"
-            >
-              <input
-                id="addr-line2"
-                type="text"
-                autoComplete="address-line2"
-                value={addressLine2}
-                onChange={(e) => setAddressLine2(e.target.value)}
-                placeholder="e.g. Tower B, 4th Floor"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-              />
-            </FormField>
-
-            {/* Area / Locality */}
-            <FormField
-              id="addr-area"
-              label="Area / Locality"
-              required
-              error={touched.areaLocality ? formErrors.areaLocality : undefined}
-            >
-              <input
-                id="addr-area"
-                type="text"
-                value={areaLocality}
-                onChange={(e) => {
-                  setAreaLocality(e.target.value)
-                  if (touched.areaLocality) setFormErrors((prev) => ({ ...prev, areaLocality: '' }))
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, areaLocality: true }))
-                  if (!areaLocality.trim()) setFormErrors((prev) => ({ ...prev, areaLocality: 'Area / Locality is required.' }))
-                }}
-                placeholder="e.g. Indiranagar, Koramangala, Connaught Place"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-              />
-            </FormField>
-
-            {/* City, State, PIN Code 3-column row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <FormField
-                id="addr-city"
-                label="City"
-                required
-                error={touched.city ? formErrors.city : undefined}
-              >
-                <input
-                  id="addr-city"
-                  type="text"
-                  autoComplete="address-level2"
-                  value={city}
-                  onChange={(e) => {
-                    setCity(e.target.value)
-                    if (touched.city) setFormErrors((prev) => ({ ...prev, city: '' }))
-                  }}
-                  onBlur={() => {
-                    setTouched((prev) => ({ ...prev, city: true }))
-                    if (!city.trim()) setFormErrors((prev) => ({ ...prev, city: 'City is required.' }))
-                  }}
-                  placeholder="e.g. Bengaluru"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-                />
-              </FormField>
-
-              <FormField
-                id="addr-state"
-                label="State"
-                required
-                error={touched.state ? formErrors.state : undefined}
-              >
-                <input
-                  id="addr-state"
-                  type="text"
-                  autoComplete="address-level1"
-                  value={state}
-                  onChange={(e) => {
-                    setState(e.target.value)
-                    if (touched.state) setFormErrors((prev) => ({ ...prev, state: '' }))
-                  }}
-                  onBlur={() => {
-                    setTouched((prev) => ({ ...prev, state: true }))
-                    if (!state.trim()) setFormErrors((prev) => ({ ...prev, state: 'State is required.' }))
-                  }}
-                  placeholder="e.g. Karnataka"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-                />
-              </FormField>
-
-              <FormField
-                id="addr-pincode"
-                label="PIN Code"
-                required
-                error={touched.pincode ? formErrors.pincode : undefined}
-              >
-                <input
-                  id="addr-pincode"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  autoComplete="postal-code"
-                  value={pincode}
-                  onChange={(e) => {
-                    const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6)
-                    setPincode(cleaned)
-                    if (touched.pincode) setFormErrors((prev) => ({ ...prev, pincode: '' }))
-                  }}
-                  onBlur={() => {
-                    setTouched((prev) => ({ ...prev, pincode: true }))
-                    if (!/^\d{6}$/.test(pincode)) {
-                      setFormErrors((prev) => ({ ...prev, pincode: 'Valid 6-digit PIN Code required.' }))
-                    }
-                  }}
-                  placeholder="e.g. 560038"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
-                />
-              </FormField>
-            </div>
-
-            {/* Landmark */}
-            <FormField
-              id="addr-landmark"
-              label="Landmark"
-              required
-              error={touched.landmark ? formErrors.landmark : undefined}
-            >
-              <input
-                id="addr-landmark"
-                type="text"
-                value={landmark}
-                onChange={(e) => {
-                  setLandmark(e.target.value)
-                  if (touched.landmark) setFormErrors((prev) => ({ ...prev, landmark: '' }))
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, landmark: true }))
-                  if (!landmark.trim()) setFormErrors((prev) => ({ ...prev, landmark: 'Landmark is required.' }))
-                }}
-                placeholder="e.g. Opposite State Bank, Near Metro Pillar 140"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-              />
-            </FormField>
-
-            {/* Additional Directions */}
-            <FormField
-              id="addr-directions"
-              label="Additional Pickup Instructions"
-            >
-              <textarea
-                id="addr-directions"
-                rows={2}
-                value={additionalDirections}
-                onChange={(e) => setAdditionalDirections(e.target.value)}
-                placeholder="Instructions for the collecting volunteer"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm font-medium text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F] focus:ring-2 focus:ring-[#29352F]/10"
-              />
-            </FormField>
-
-            {/* Interactive Leaflet Map for Exact Location Pin */}
-            <div className="pt-2">
-              <CollectionLocationMap
-                latitude={latitude}
-                longitude={longitude}
-                onLocationChange={(lat, lng) => {
-                  setLatitude(lat)
-                  setLongitude(lng)
-                  if (formErrors.coordinates) setFormErrors((prev) => ({ ...prev, coordinates: '' }))
-                }}
-                onAutofillRequest={handleAutofillCurrentLocation}
-                city={city}
-                state={state}
-              />
-              {formErrors.coordinates && (
-                <p role="alert" className="text-xs text-red-600 mt-1 font-medium">
-                  {formErrors.coordinates}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Section D: Identity Proof Document */}
-          <div className="pt-4 border-t border-[#E6EAE7]">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#6B756F] mb-3">
-              4. Identity Verification
-            </h2>
-
-            <IdentityDocumentUploader
-              id="donor-identity-upload"
-              docType={identityDocType}
-              onDocTypeChange={setIdentityDocType}
-              document={document}
-              onDocumentChange={(doc) => {
-                setDocument(doc)
-                if (touched.document) setFormErrors((prev) => ({ ...prev, document: '' }))
+              onVerified={(phone) => {
+                if (phone) {
+                  setCountryCode(phone.countryCode)
+                  setPhoneNumber(phone.phoneNumber)
+                  setPhoneVerified(true)
+                  setFormErrors((previous) => ({ ...previous, phoneNumber: '' }))
+                } else {
+                  setPhoneNumber('')
+                  setPhoneVerified(false)
+                }
               }}
-              error={touched.document ? formErrors.document : undefined}
             />
+
+            <FormField label="Create Password" required error={touched.password ? formErrors.password : undefined}>
+              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C] focus:ring-1 focus:ring-[#1E824C]" required />
+            </FormField>
+            <FormField label="Confirm Password" required error={touched.confirmPassword ? formErrors.confirmPassword : undefined}>
+              <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter password" className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C] focus:ring-1 focus:ring-[#1E824C]" required />
+            </FormField>
+
+            {false && <div className="pt-2 border-t border-[#E6EAE7] space-y-4">
+              <FormField label="Identity Proof Type" required>
+                <select
+                  value={identityDocType}
+                  onChange={(e) => setIdentityDocType(e.target.value as IdentityDocumentType)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                >
+                  <option value="aadhaar">Aadhaar Card (Government of India)</option>
+                  <option value="pan">PAN Card</option>
+                  <option value="voter_id">Voter Identity Card</option>
+                  <option value="driving_license">Driving Licence</option>
+                  <option value="passport">Passport</option>
+                  <option value="fssai_registration">FSSAI Food Business Registration</option>
+                </select>
+              </FormField>
+
+              <FormField label="Upload Identity Proof Document" required error={touched.document ? formErrors.document : undefined}>
+                <IdentityDocumentUploader
+                  document={document}
+                  onDocumentUploaded={(doc: UploadedDocument) => {
+                    setDocument(doc)
+                    setFormErrors((prev) => ({ ...prev, document: '' }))
+                  }}
+                  onDocumentRemoved={() => setDocument(null)}
+                  error={touched.document ? formErrors.document : undefined}
+                />
+              </FormField>
+            </div>}
           </div>
 
-          {/* Consent Checkbox */}
-          <div className="pt-2 border-t border-[#E6EAE7]">
-            <label className="flex items-start gap-3 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={consentGiven}
-                onChange={(e) => {
-                  setConsentGiven(e.target.checked)
-                  if (touched.consent) setFormErrors((prev) => ({ ...prev, consent: '' }))
-                }}
-                className="mt-1 w-4 h-4 rounded text-[#2E7D32] border-[#E6EAE7] focus:ring-[#2E7D32] cursor-pointer"
-              />
-              <span className="text-xs text-[#6B756F] leading-relaxed select-none">
-                I certify that the surplus food donated meets basic food safety and hygiene guidelines, and I consent to sharing the physical collection address with authorized volunteers to coordinate surplus food pickups.
-              </span>
-            </label>
-            {touched.consent && formErrors.consent && (
-              <p role="alert" className="text-xs text-red-600 mt-1 font-medium">
-                {formErrors.consent}
-              </p>
-            )}
+          <div className="pt-4 flex justify-end">
+            <button
+              type="submit"
+              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#29352F] hover:bg-[#1B231F] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <span>Continue to Step 2</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
-
-          {/* Error Banner if SMS Send Failed */}
-          {submitError && (
-            <div role="alert" className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="leading-relaxed">
-                <strong className="block font-semibold">Verification Request Error:</strong>
-                <span>{submitError}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Primary Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-[#29352F] hover:bg-[#1B231F] disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs group"
-          >
-            {isSubmitting ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Requesting SMS Verification Code...</span>
-              </>
-            ) : (
-              <>
-                <span>{DEMO_SKIP_OTP ? 'Continue' : 'Verify & Continue'}</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </>
-            )}
-          </button>
         </form>
       )}
 
-      {/* STEP 2: Phone OTP Verification */}
+      {/* ======================================================== */}
+      {/* STEP 2: Food Source & Donor Address                      */}
+      {/* ======================================================== */}
       {currentStep === 2 && (
-        <OTPVerification
-          countryCode={countryCode}
-          phoneNumber={phoneNumber}
-          verificationId={verificationId}
-          onVerified={handleOtpVerified}
-          onEditPhone={() => setCurrentStep(1)}
-        />
+        <form onSubmit={handleNextStep2} className="space-y-6">
+          <div className="space-y-3">
+            <h3 className="font-heading font-bold text-base text-[#29352F]">Identity Proof</h3>
+            <IdentityDocumentUploader document={document} docType={identityDocType} onDocTypeChange={setIdentityDocType} onDocumentUploaded={setDocument} onDocumentRemoved={() => setDocument(null)} />
+          </div>
+          {/* A. Food Source Selection */}
+          <div className="space-y-3">
+            <label className="block text-sm font-bold text-[#29352F]">
+              Where Does the Food Come From? <span className="text-red-500">*</span>
+            </label>
+            <p className="text-xs text-[#6B756F]">
+              Select the category that best describes your food establishment or household:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {FOOD_SOURCES.map((source) => {
+                const isSelected = foodSourceType === source.id
+                return (
+                  <div
+                    key={source.id}
+                    onClick={() => {
+                      setFoodSourceType(source.id)
+                      if (source.id === 'other') {
+                        setTempOtherText(customFoodSource)
+                        setShowOtherModal(true)
+                      }
+                    }}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-[#1E824C] bg-[#E8F5E9]/60 shadow-2xs'
+                        : 'border-[#E6EAE7] bg-white hover:border-neutral-300'
+                    }`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'bg-[#1E824C] text-white'
+                          : 'bg-[#FAFAFA] text-[#6B756F] border border-[#E6EAE7]'
+                      }`}
+                    >
+                      {source.icon}
+                    </div>
+                    <div>
+                      <div className="font-heading font-bold text-sm text-[#29352F]">
+                        {source.label}
+                      </div>
+                      <div className="text-[11px] text-[#6B756F] mt-0.5 leading-tight">
+                        {source.desc}
+                      </div>
+                      {source.id === 'other' && customFoodSource && isSelected && (
+                        <div className="mt-1 text-[11px] font-bold text-[#1E824C] bg-white px-2 py-0.5 rounded border border-[#C8E6C9] inline-block">
+                          Specified: {customFoodSource}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {formErrors.foodSource && (
+              <p className="text-xs text-red-600 mt-1">{formErrors.foodSource}</p>
+            )}
+          </div>
+
+          {/* B. Donor Address Section */}
+          <div className="pt-4 border-t border-[#E6EAE7] space-y-4">
+            <div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[#29352F]">
+                  Donor Address
+                </h3>
+                <p className="text-xs text-[#6B756F]">
+                  Enter your physical location where surplus food will be packaged for collection.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <FormField label="Address Line 1" required error={touched.addressLine1 ? formErrors.addressLine1 : undefined}>
+                <input
+                  type="text"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="e.g. 42, 100 Feet Road, Near Sony Signal"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                  required
+                />
+              </FormField>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Area / Locality" required error={touched.areaLocality ? formErrors.areaLocality : undefined}>
+                  <input
+                    type="text"
+                    value={areaLocality}
+                    onChange={(e) => setAreaLocality(e.target.value)}
+                    placeholder="e.g. Indiranagar"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                    required
+                  />
+                </FormField>
+
+                <FormField label="Landmark (Optional)">
+                  <input
+                    type="text"
+                    value={landmark}
+                    onChange={(e) => setLandmark(e.target.value)}
+                    placeholder="e.g. Opposite Metro Pillar 140"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <FormField label="City" required error={touched.city ? formErrors.city : undefined}>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Bengaluru"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                    required
+                  />
+                </FormField>
+
+                <FormField label="State" required error={touched.state ? formErrors.state : undefined}>
+                  <input
+                    type="text"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    placeholder="e.g. Karnataka"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                    required
+                  />
+                </FormField>
+
+                <FormField label="PIN Code" required error={touched.pincode ? formErrors.pincode : undefined}>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value)}
+                    placeholder="e.g. 560038"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                    required
+                  />
+                </FormField>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3"><button type="button" onClick={() => { if (validateStep2()) setAddressNotice('Address saved successfully.') }} className="px-4 py-2.5 rounded-xl border border-[#1E824C] text-[#1B5E20] text-sm font-bold cursor-pointer">Save Address</button>{addressNotice && <span className="text-sm text-[#1B5E20]">{addressNotice}</span>}</div>
+          <div className="pt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setCurrentStep(1)}
+              className="px-5 py-2.5 rounded-xl border border-[#E6EAE7] text-[#6B756F] hover:bg-neutral-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Step 1</span>
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-xl bg-[#29352F] hover:bg-[#1B231F] text-white text-sm font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <span>Continue to Step 3</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </form>
       )}
 
-      {/* STEP 3: Completed / Status Summary */}
-      {currentStep === 3 && completedRecord && (
-        <RegistrationStatus record={completedRecord} />
+      {/* ======================================================== */}
+      {/* STEP 3: Donor Terms and Conditions                       */}
+      {/* ======================================================== */}
+      {currentStep === 3 && (
+        <form onSubmit={handleFinalSubmit} className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-heading font-bold text-base text-[#29352F]">
+              Review & Donor Declarations
+            </h3>
+            <p className="text-xs text-[#6B756F]">
+              Please review your information and check both required declarations below before completing your registration:
+            </p>
+
+            {/* Compact review summary */}
+            <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E6EAE7] text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#6B756F]">Donor Name:</span>
+                <span className="font-bold text-[#29352F]">{fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6B756F]">Contact Phone:</span>
+                <span className="font-bold text-[#29352F]">{countryCode} {phoneNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6B756F]">Food Source:</span>
+                <span className="font-bold text-[#1E824C] capitalize">
+                  {foodSourceType === 'other' ? `Other (${customFoodSource})` : foodSourceType.replace('_', ' ')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6B756F]">Address:</span>
+                <span className="font-medium text-[#29352F] text-right max-w-xs truncate">
+                  {addressLine1}, {areaLocality}, {city} - {pincode}
+                </span>
+              </div>
+            </div>
+
+            <AccountabilityChecklist title="Donor Terms & Conditions" checked={donorTerms} onChange={updateDonorTerm} items={[
+              'I confirm that the information I provide during registration is accurate and belongs to me.',
+              'I confirm that I will only donate food that I believe to be suitable for human consumption and that I will not knowingly donate spoiled, contaminated, adulterated or unsafe food.',
+              'I agree to provide accurate information about the food, including its type, quantity, preparation time, storage/handling conditions and known allergens whenever requested.',
+              'I will not intentionally hide any known food-safety issue or information that could reasonably affect the recipient\'s decision to accept the food.',
+              'I understand that the platform facilitates food sharing and does not independently certify every food donation as safe.',
+              'I understand that knowingly providing false information or knowingly donating unsafe food may result in my account being restricted or terminated and may be reported where appropriate.',
+              'I agree to comply with the platform\'s food-safety, donation and conduct rules.',
+            ]} />
+
+            {submitError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setCurrentStep(2)}
+              className="px-5 py-2.5 rounded-xl border border-[#E6EAE7] text-[#6B756F] hover:bg-neutral-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Step 2</span>
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !donorTerms.every(Boolean)}
+              className="px-6 py-3 rounded-xl bg-[#1E824C] hover:bg-[#166B3D] disabled:opacity-50 text-white text-sm font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Submitting Registration...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Complete Donor Registration</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* POPUP MODAL FOR "OTHER" FOOD SOURCE SPECIFICATION */}
+      {showOtherModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-2xs flex items-center justify-center p-4"
+          onClick={() => setShowOtherModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-[#E6EAE7] shadow-xl p-6 max-w-sm w-full space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-heading font-bold text-sm text-[#29352F]">
+                Please specify your food source.
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowOtherModal(false)}
+                className="text-neutral-400 hover:text-neutral-600 p-1 rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <input
+                type="text"
+                value={tempOtherText}
+                onChange={(e) => setTempOtherText(e.target.value)}
+                placeholder="Enter your food source"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] text-sm text-[#29352F] focus:outline-none focus:border-[#1E824C]"
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowOtherModal(false)}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[#6B756F] hover:bg-neutral-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (tempOtherText.trim()) {
+                    setCustomFoodSource(tempOtherText.trim())
+                    setShowOtherModal(false)
+                    setFormErrors((prev) => ({ ...prev, foodSource: '' }))
+                  }
+                }}
+                disabled={!tempOtherText.trim()}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#1E824C] hover:bg-[#166B3D] disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </RegistrationLayout>
   )

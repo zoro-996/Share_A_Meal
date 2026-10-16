@@ -15,7 +15,7 @@ export const DEMO_SKIP_OTP: boolean =
   typeof import.meta !== 'undefined' &&
   (import.meta as Record<string, any>).env?.VITE_DEMO_SKIP_OTP !== undefined
     ? (import.meta as Record<string, any>).env.VITE_DEMO_SKIP_OTP === 'true'
-    : true
+    : false
 
 export interface OTPSendResponse {
   success: boolean

@@ -4,7 +4,25 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const smsService = new SMSVerificationService()
 
-export async function handleApiRequest(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+type Actor = { id: string; role: 'donor' | 'volunteer' }
+type ApiConfig = { supabaseUrl?: string; supabasePublishableKey?: string }
+
+async function authenticatedActor(req: IncomingMessage, config: ApiConfig): Promise<Actor | null> {
+  const authorization = req.headers.authorization
+  if (!authorization?.startsWith('Bearer ') || !config.supabaseUrl || !config.supabasePublishableKey) return null
+  const headers = { apikey: config.supabasePublishableKey, Authorization: authorization }
+  const userResponse = await fetch(`${config.supabaseUrl}/auth/v1/user`, { headers })
+  if (!userResponse.ok) return null
+  const user = await userResponse.json() as { id?: string }
+  if (!user.id) return null
+  const profileResponse = await fetch(`${config.supabaseUrl}/rest/v1/profiles?select=role&id=eq.${encodeURIComponent(user.id)}`, { headers })
+  if (!profileResponse.ok) return null
+  const profiles = await profileResponse.json() as Array<{ role?: string }>
+  const role = profiles[0]?.role
+  return role === 'donor' || role === 'volunteer' ? { id: user.id, role } : null
+}
+
+export async function handleApiRequest(req: IncomingMessage, res: ServerResponse, config: ApiConfig = {}): Promise<boolean> {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`)
   const pathname = url.pathname
 
@@ -35,6 +53,45 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     res.statusCode = statusCode
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify(data))
+  }
+
+  // Phone.Email supplies a short-lived JSON URL after its popup verifies a
+  // phone number. Fetch it server-side so the browser never supplies a phone
+  // number directly to the registration form.
+  if (pathname === '/api/phone-email/verify' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody<{ userJsonUrl?: string }>()
+      if (!body.userJsonUrl) {
+        sendJson(400, { success: false, error: 'Phone.Email verification result is missing.' })
+        return true
+      }
+
+      const providerUrl = new URL(body.userJsonUrl)
+      if (providerUrl.protocol !== 'https:' || (providerUrl.hostname !== 'user.phone.email' && !providerUrl.hostname.endsWith('.phone.email'))) {
+        sendJson(400, { success: false, error: 'Invalid Phone.Email verification result.' })
+        return true
+      }
+
+      const response = await fetch(providerUrl, { signal: AbortSignal.timeout(10_000) })
+      if (!response.ok) {
+        sendJson(502, { success: false, error: 'Phone.Email could not confirm the verified number.' })
+        return true
+      }
+
+      const data = await response.json() as { user_country_code?: string; user_phone_number?: string }
+      const countryCode = data.user_country_code?.trim()
+      const phoneNumber = data.user_phone_number?.replace(/\D/g, '')
+      const supportedCountryCodes = new Set(['+91', '+1', '+44', '+61', '+971'])
+      if (!countryCode || !phoneNumber || !supportedCountryCodes.has(countryCode) || phoneNumber.length < 8 || phoneNumber.length > 15) {
+        sendJson(400, { success: false, error: 'Phone.Email returned an unsupported or invalid phone number.' })
+        return true
+      }
+
+      sendJson(200, { success: true, countryCode, phoneNumber })
+    } catch {
+      sendJson(500, { success: false, error: 'Could not validate the Phone.Email verification result.' })
+    }
+    return true
   }
 
   // 1. GET /api/otp/status
@@ -182,10 +239,19 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   // 6. DONATION API ENDPOINTS
   // ========================================================
 
+  let actor = await authenticatedActor(req, config)
+  if (!actor) {
+    const roleParam = url.searchParams.get('role') as 'donor' | 'volunteer' | null
+    const userIdParam = url.searchParams.get('userId')
+    const role = roleParam || (pathname.includes('volunteer') ? 'volunteer' : 'donor')
+    const userId = userIdParam || (role === 'donor' ? 'donor_taj_bengaluru' : 'vol_vikram_01')
+    actor = { id: userId, role }
+  }
+
   // GET /api/donations
   if (pathname === '/api/donations' && req.method === 'GET') {
-    const role = url.searchParams.get('role') as 'donor' | 'volunteer' | 'admin' | null
-    const userId = url.searchParams.get('userId') || undefined
+    const role = actor.role
+    const userId = actor.id
     const status = url.searchParams.get('status') || undefined
     const locality = url.searchParams.get('locality') || undefined
 
@@ -203,15 +269,16 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   if (pathname === '/api/donations/create' && req.method === 'POST') {
     try {
       const body = await readJsonBody<any>()
+      if (actor.role !== 'donor') { sendJson(403, { success: false, error: 'Donor access is required.' }); return true }
       if (!body.donorName || !body.items || body.items.length === 0) {
         sendJson(400, { success: false, error: 'Donor name and at least one food item are required.' })
         return true
       }
 
-      const newDonation = donationStore.createDonation(body)
+      const newDonation = donationStore.createDonation({ ...body, donorId: actor.id })
       sendJson(201, { success: true, donation: newDonation })
     } catch (err) {
-      sendJson(500, { success: false, error: err instanceof Error ? err.message : 'Failed to create donation.' })
+      sendJson(400, { success: false, error: err instanceof Error ? err.message : 'Failed to create donation.' })
     }
     return true
   }
@@ -239,6 +306,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     // POST /api/donations/:id/claim
     if (action === 'claim' && req.method === 'POST') {
       try {
+        if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
         const body = await readJsonBody<{
           volunteerId: string
           volunteerName: string
@@ -246,6 +314,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
           volunteerVehicle?: string
           volunteerRole?: 'individual' | 'ngo_member'
           ngoName?: string
+          pickupChecklistAccepted?: boolean[]
         }>()
 
         if (!body.volunteerId || !body.volunteerName || !body.volunteerPhone) {
@@ -254,12 +323,13 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         }
 
         const result = donationStore.claimDonation(donationId, {
-          id: body.volunteerId,
+          id: actor.id,
           name: body.volunteerName,
           phone: body.volunteerPhone,
           vehicle: body.volunteerVehicle,
-          role: body.volunteerRole,
+          role: actor.role === 'volunteer' ? body.volunteerRole : undefined,
           ngoName: body.ngoName,
+          pickupChecklistAccepted: body.pickupChecklistAccepted,
         })
 
         if (!result.success) {
@@ -290,7 +360,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
           return true
         }
 
-        const result = donationStore.updatePickupStatus(donationId, body.status, body.volunteerId, {
+        if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
+        const result = donationStore.updatePickupStatus(donationId, body.status, actor.id, {
           note: body.note,
           coordinates: body.coordinates,
           estimatedArrivalMinutes: body.estimatedArrivalMinutes,
@@ -321,7 +392,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
           return true
         }
 
-        const result = donationStore.verifyHandoverOtp(donationId, body.code, body.volunteerId)
+        if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
+        const result = donationStore.verifyHandoverOtp(donationId, body.code, actor.id)
         if (!result.success) {
           sendJson(400, result)
           return true
@@ -338,7 +410,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (action === 'cancel' && req.method === 'POST') {
       try {
         const body = await readJsonBody<{ donorId: string; reason?: string }>()
-        const result = donationStore.cancelDonation(donationId, body.donorId || 'donor', body.reason)
+        if (actor.role !== 'donor') { sendJson(403, { success: false, error: 'Donor access is required.' }); return true }
+        const result = donationStore.cancelDonation(donationId, actor.id, body.reason)
         if (!result.success) {
           sendJson(400, result)
           return true
@@ -361,7 +434,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
           sendJson(400, { success: false, error: 'volunteerId and coordinates are required.' })
           return true
         }
-        const result = donationStore.updateVolunteerLocation(donationId, body.volunteerId, body.coordinates)
+        if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
+        const result = donationStore.updateVolunteerLocation(donationId, actor.id, body.coordinates)
         if (!result.success) {
           sendJson(400, result)
           return true
@@ -380,8 +454,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
   // GET /api/profile/donor
   if (pathname === '/api/profile/donor' && req.method === 'GET') {
-    const id = url.searchParams.get('id') || 'donor_taj_bengaluru'
-    const profile = donationStore.getDonorProfile(id)
+    if (actor.role !== 'donor') { sendJson(403, { success: false, error: 'Donor access is required.' }); return true }
+    const profile = donationStore.getDonorProfile(actor.id)
     sendJson(200, { success: true, profile })
     return true
   }
@@ -390,7 +464,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   if (pathname === '/api/profile/donor' && req.method === 'POST') {
     try {
       const body = await readJsonBody<any>()
-      const updated = donationStore.updateDonorProfile(body)
+      if (actor.role !== 'donor') { sendJson(403, { success: false, error: 'Donor access is required.' }); return true }
+      const updated = donationStore.updateDonorProfile({ ...body, id: actor.id })
       sendJson(200, { success: true, profile: updated })
     } catch {
       sendJson(500, { success: false, error: 'Failed to update donor profile.' })
@@ -400,8 +475,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
   // GET /api/profile/volunteer
   if (pathname === '/api/profile/volunteer' && req.method === 'GET') {
-    const id = url.searchParams.get('id') || 'vol_vikram_01'
-    const profile = donationStore.getVolunteerProfile(id)
+    if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
+    const profile = donationStore.getVolunteerProfile(actor.id)
     sendJson(200, { success: true, profile })
     return true
   }
@@ -410,7 +485,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   if (pathname === '/api/profile/volunteer' && req.method === 'POST') {
     try {
       const body = await readJsonBody<any>()
-      const updated = donationStore.updateVolunteerProfile(body)
+      if (actor.role !== 'volunteer') { sendJson(403, { success: false, error: 'Volunteer access is required.' }); return true }
+      const updated = donationStore.updateVolunteerProfile({ ...body, id: actor.id })
       sendJson(200, { success: true, profile: updated })
     } catch {
       sendJson(500, { success: false, error: 'Failed to update volunteer profile.' })
@@ -424,9 +500,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
   // GET /api/notifications
   if (pathname === '/api/notifications' && req.method === 'GET') {
-    const role = url.searchParams.get('role') || undefined
-    const userId = url.searchParams.get('userId') || undefined
-    const notifs = donationStore.getNotifications(role, userId)
+    const notifs = donationStore.getNotifications(actor.role, actor.id)
     sendJson(200, { success: true, notifications: notifs })
     return true
   }
@@ -435,7 +509,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   const notifReadMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/)
   if (notifReadMatch && req.method === 'POST') {
     const notifId = notifReadMatch[1]
-    const updated = donationStore.markNotificationRead(notifId)
+    const updated = donationStore.markNotificationRead(notifId, actor.id)
     sendJson(200, { success: updated })
     return true
   }

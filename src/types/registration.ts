@@ -4,7 +4,7 @@ export type VolunteerRoleType = 'individual' | 'ngo_member'
 
 export type IdentityDocumentType = 'aadhaar' | 'pan' | 'other_gov_id'
 
-export type FoodSourceType = 'restaurant' | 'home' | 'function_event' | 'other'
+export type FoodSourceType = 'restaurant' | 'hotel' | 'home' | 'catering' | 'function_event' | 'other'
 
 export interface UploadedDocument {
   file: File
@@ -36,7 +36,7 @@ export interface DonorCollectionAddress {
   city: string
   state: string
   pincode: string
-  landmark: string
+  landmark?: string
   additionalDirections?: string
   latitude: number | null
   longitude: number | null
@@ -100,6 +100,7 @@ export interface RegistrationRecord {
   details: {
     volunteerRole?: VolunteerRoleType
     ngoName?: string
+    ngoRegistrationNumber?: string
     foodSourceType?: FoodSourceType
     customFoodSource?: string
     collectionAddress?: DonorCollectionAddress
@@ -111,6 +112,7 @@ export interface DonorUserProfile {
   name: string
   phone: string
   donorType: FoodSourceType
+  isVerified?: boolean
   collectionAddress: DonorCollectionAddress
 }
 
