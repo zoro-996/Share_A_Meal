@@ -911,6 +911,11 @@ export const onRequest: PagesFunction = async (context) => {
     return json({ success: true })
   }
 
-  // Not matched — pass through to Vite static assets
+  // Not matched API route
+  if (path.startsWith('/api/')) {
+    return json({ success: false, error: 'API route not found' }, 404)
+  }
+
+  // Pass through to static assets
   return context.next()
 }
