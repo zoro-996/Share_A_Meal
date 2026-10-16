@@ -2,6 +2,19 @@
 
 **Share a Meal** connects people and businesses with surplus food to volunteers and NGOs who collect and distribute it to people in need.
 
+## Live demo
+
+The current Cloudflare Worker deployment is available at:
+
+[https://share-a-meal-live.codeenma1440.workers.dev](https://share-a-meal-live.codeenma1440.workers.dev)
+
+The demo starts with four available food listings from one Tirupati donor:
+
+- Tata Nagar — 30 portions
+- Ashok Nagar, Korlagunta — 35 portions
+- SV University Campus Area — 40 portions
+- Srinivasa Nagar / Varadaraja Nagar — 30 portions
+
 ## Features
 
 - **Donor registration & dashboard** — Restaurants, households, and event organizers can list surplus food with itemized details, photos, and expiry windows.
@@ -20,7 +33,9 @@
 | Frontend | React 19, TypeScript, Vite 8 |
 | Styling | Tailwind CSS v4 |
 | Maps | Leaflet.js |
-| Backend (dev) | Node.js Vite plugin (in-process API handler) |
+| Backend | Cloudflare Worker API routes |
+| Authentication | Supabase Auth and profiles |
+| Phone verification | Phone.Email backend verification endpoint |
 | SMS OTP | Twilio Verify v2 (configurable; demo mode bypasses OTP) |
 | Geocoding | OpenStreetMap Nominatim |
 
@@ -38,6 +53,23 @@ npm run dev
 ```
 
 Visit [http://localhost:5173](http://localhost:5173).
+
+## Cloudflare deployment
+
+```bash
+npm install
+npx wrangler login
+npm run deploy
+```
+
+Keep SMS/OTP provider credentials out of source control and add them as Cloudflare Worker secrets:
+
+```bash
+npx wrangler secret put SMS_ACCOUNT_SID
+npx wrangler secret put SMS_AUTH_TOKEN
+npx wrangler secret put SMS_VERIFY_SERVICE_SID
+npx wrangler secret put OTP_SECRET
+```
 
 ## Environment Variables
 

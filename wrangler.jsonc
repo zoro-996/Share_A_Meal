@@ -1,9 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "share-a-meal",
+  "name": "share-a-meal-live",
   "main": "worker.ts",
   "compatibility_date": "2026-10-15",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "VITE_SUPABASE_URL": "https://btjirvrcnezonlbzqkle.supabase.co",
+    "VITE_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_cTx9oGEMLCPsHPEsHtrGrg_JYUHvcEF"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

@@ -444,27 +444,78 @@ function makeSeedDonations(): Donation[] {
 
 // ─── MODULE-LEVEL IN-MEMORY STORE ────────────────────────────────────────────
 
+/** The only initial listings shown in the test environment. */
+function makeTirupatiTestDonations(): Donation[] {
+  const now = Date.now()
+  const donor = {
+    id: 'donor_tirupati_test',
+    name: 'Tirupati Food Donor',
+    phone: '9000000000',
+    type: 'household',
+  }
+  const locations: Array<{
+    id: string; food: string; quantity: number; addressLine1: string; areaLocality: string
+    landmark: string; pincode: string; latitude: number; longitude: number
+  }> = [
+    { id: 'tirupati_hpo', food: 'Fresh Vegetarian Meals', quantity: 30, addressLine1: '13-3-344, Head Post Office Street', areaLocality: 'Tata Nagar', landmark: 'Tirupati Head Post Office', pincode: '517501', latitude: 13.6288, longitude: 79.4192 },
+    { id: 'tirupati_korlagunta', food: 'Rice and Vegetable Curry', quantity: 35, addressLine1: '949A, Korlagunta Main Road', areaLocality: 'Ashok Nagar, Korlagunta', landmark: 'Korlagunta Post Office', pincode: '517501', latitude: 13.6355, longitude: 79.4281 },
+    { id: 'tirupati_svu', food: 'Packed Lunch Boxes', quantity: 40, addressLine1: 'Sri Venkateswara University Road', areaLocality: 'SV University Campus Area', landmark: 'SV University 3rd Gate', pincode: '517502', latitude: 13.6286, longitude: 79.3983 },
+    { id: 'tirupati_kapila', food: 'Breakfast Packets', quantity: 30, addressLine1: 'Kapila Theertham Road', areaLocality: 'Srinivasa Nagar, Varadaraja Nagar', landmark: 'Tirupati North Post Office', pincode: '517507', latitude: 13.6477, longitude: 79.4122 },
+  ]
+
+  return locations.map((location, index) => {
+    const readyAt = new Date(now - (index + 1) * 15 * 60_000).toISOString()
+    const deadlineAt = new Date(now + (3 + index) * 60 * 60_000).toISOString()
+    const item: FoodItem = {
+      id: `item_${location.id}`,
+      name: location.food,
+      quantity: location.quantity,
+      unit: 'portions',
+      foodType: 'veg',
+      shelfLifeHours: 6,
+      safeUntil: deadlineAt,
+    }
+    return {
+      id: `don_${location.id}`,
+      donorId: donor.id,
+      donorName: donor.name,
+      donorPhone: donor.phone,
+      donorType: donor.type,
+      items: [item],
+      totalQuantityLabel: `${location.quantity} portions ${location.food}`,
+      estimatedPeopleServed: location.quantity,
+      foodPreparationTime: readyAt,
+      foodCategory: 'prepared_meals',
+      foodCategories: ['prepared_meals'],
+      foodShelfLifeCategory: 'cooked_meals',
+      earliestSafeUntil: deadlineAt,
+      pickupSchedule: { readyType: 'immediate', readyTime: readyAt, deadlineTime: deadlineAt, pickupInstructions: 'Please collect from the stated landmark.' },
+      collectionAddress: {
+        addressLine1: location.addressLine1,
+        areaLocality: location.areaLocality,
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: location.pincode,
+        landmark: location.landmark,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      },
+      photos: [],
+      status: 'available',
+      createdAt: readyAt,
+      handoverOtp: String(100000 + index),
+    }
+  })
+}
+
 let donations: Donation[] = []
 let notifications: DonationNotification[] = []
 let initialized = false
 
 function ensureInitialized() {
   if (!initialized) {
-    donations = makeSeedDonations()
-    notifications = [
-      {
-        id: 'notif_seed_1',
-        recipientRole: 'donor',
-        recipientId: 'donor_heritage_kitchen',
-        donationId: 'don_seed_004',
-        title: 'Volunteer En Route!',
-        message: 'Vikram Sharma has claimed your donation and is en route. Handover OTP: 591402',
-        type: 'handover_otp',
-        createdAt: new Date(Date.now() - 24 * 60_000).toISOString(),
-        read: false,
-        handoverOtp: '591402',
-      },
-    ]
+    donations = makeTirupatiTestDonations()
+    notifications = []
     initialized = true
   }
 }
@@ -559,6 +610,59 @@ export const onRequest: PagesFunction = async (context) => {
     })
   }
 
+  // ── POST /api/phone-email/verify ───────────────────────────────────────
+  // Phone.Email supplies a short-lived JSON URL after its OTP flow succeeds.
+  // Fetching it server-side is essential: the browser must not be trusted to
+  // provide a phone number on its own. Restrict the URL to Phone.Email's
+  // official host so this endpoint cannot be used as an arbitrary fetch proxy.
+  if (path === '/api/phone-email/verify' && req.method === 'POST') {
+    let verificationRequest: { userJsonUrl?: unknown }
+    try {
+      verificationRequest = (await req.json()) as { userJsonUrl?: unknown }
+    } catch {
+      return json({ success: false, error: 'A Phone.Email verification response is required.' }, 400)
+    }
+
+    if (typeof verificationRequest.userJsonUrl !== 'string') {
+      return json({ success: false, error: 'Phone.Email did not return a verification URL.' }, 400)
+    }
+
+    let userJsonUrl: URL
+    try {
+      userJsonUrl = new URL(verificationRequest.userJsonUrl)
+    } catch {
+      return json({ success: false, error: 'The Phone.Email verification URL is invalid.' }, 400)
+    }
+
+    if (userJsonUrl.protocol !== 'https:' || userJsonUrl.hostname !== 'user.phone.email' || !userJsonUrl.pathname.endsWith('.json')) {
+      return json({ success: false, error: 'The Phone.Email verification URL was rejected.' }, 400)
+    }
+
+    try {
+      const verifiedResponse = await fetch(userJsonUrl.toString(), {
+        headers: { Accept: 'application/json' },
+      })
+      if (!verifiedResponse.ok) {
+        return json({ success: false, error: 'Phone.Email could not confirm this verification. Please try again.' }, 502)
+      }
+      const verifiedUser = (await verifiedResponse.json()) as {
+        user_country_code?: unknown
+        user_phone_number?: unknown
+      }
+      const countryCode = String(verifiedUser.user_country_code || '').trim()
+      const phoneNumber = String(verifiedUser.user_phone_number || '').replace(/\D/g, '')
+      const supportedCountryCodes = new Set(['+91', '+1', '+44', '+61', '+971'])
+
+      if (!supportedCountryCodes.has(countryCode) || !/^\d{7,15}$/.test(phoneNumber)) {
+        return json({ success: false, error: 'Phone.Email returned an unsupported or invalid phone number.' }, 400)
+      }
+
+      return json({ success: true, countryCode, phoneNumber })
+    } catch {
+      return json({ success: false, error: 'Phone.Email verification could not be completed. Please try again.' }, 502)
+    }
+  }
+
   // Skip — let specific function files handle their own routes
   if (
     path.startsWith('/api/otp/') ||
@@ -573,7 +677,7 @@ export const onRequest: PagesFunction = async (context) => {
     const roleParam = url.searchParams.get('role') as 'donor' | 'volunteer' | null
     const userIdParam = url.searchParams.get('userId')
     const role = roleParam || (path.includes('volunteer') ? 'volunteer' : 'donor')
-    const userId = userIdParam || (role === 'donor' ? 'donor_taj_bengaluru' : 'vol_vikram_01')
+    const userId = userIdParam || 'anonymous'
     actor = { id: userId, role }
   }
 
@@ -845,8 +949,8 @@ export const onRequest: PagesFunction = async (context) => {
   // ── Profile routes ──────────────────────────────────────────────────────
   if (path === '/api/profile/donor') {
     if (req.method === 'GET') {
-      const id = url.searchParams.get('id') || 'donor_taj_bengaluru'
-      const profile = donorProfiles.get(id) || null
+      const id = url.searchParams.get('id')
+      const profile = id ? donorProfiles.get(id) || null : null
       return json({ success: true, profile })
     }
     if (req.method === 'POST') {
@@ -866,8 +970,8 @@ export const onRequest: PagesFunction = async (context) => {
 
   if (path === '/api/profile/volunteer') {
     if (req.method === 'GET') {
-      const id = url.searchParams.get('id') || 'vol_vikram_01'
-      const profile = volunteerProfiles.get(id) || null
+      const id = url.searchParams.get('id')
+      const profile = id ? volunteerProfiles.get(id) || null : null
       return json({ success: true, profile })
     }
     if (req.method === 'POST') {

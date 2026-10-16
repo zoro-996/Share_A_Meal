@@ -110,7 +110,7 @@ export async function registerUser(input: {
   return getAuthenticatedProfile()
 }
 
-export async function loginUser(countryCode: string, phoneInput: string, password: string, expectedRole: AppRole) {
+export async function loginUser(countryCode: string, phoneInput: string, password: string) {
   const phone = cleanPhone(countryCode, phoneInput)
   const passwordEmail = authEmailForPhone(phone)
   if (!password) throw new Error('Password is required.')
@@ -118,10 +118,10 @@ export async function loginUser(countryCode: string, phoneInput: string, passwor
   if (error || !data.user) throw new Error('Invalid phone number or password.')
   try {
     const authenticated = await getAuthenticatedProfile()
-    if (!authenticated || authenticated.role !== expectedRole) {
-      await supabase.auth.signOut()
-      throw new Error(`This account is registered as a ${authenticated?.role || 'different'} user. Use the correct portal to log in.`)
-    }
+    if (!authenticated) throw new Error('Could not load your profile.')
+    // A valid password is sufficient. Send the person to the portal stored in
+    // their profile instead of rejecting them when they chose the other login
+    // button on the landing page.
     return authenticated
   } catch (error) {
     if (error instanceof Error) throw error

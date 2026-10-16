@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowLeft, LockKeyhole, LogIn, UserRound } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, LockKeyhole, LogIn, UserRound } from 'lucide-react'
 import type { CountryCode } from '../../types/registration'
 import type { AppRole } from '../../services/authService'
 import { loginUser } from '../../services/authService'
@@ -16,6 +16,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role, onAuthenticated }) =
   const [countryCode, setCountryCode] = useState<CountryCode>('+91')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const roleTitle = role === 'donor' ? 'Donor Login' : 'Volunteer Login'
@@ -29,9 +30,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role, onAuthenticated }) =
     }
     setIsSubmitting(true)
     try {
-      await loginUser(countryCode, phone, password, role)
+      const authenticated = await loginUser(countryCode, phone, password)
       await onAuthenticated()
-      navigate(role === 'donor' ? '/donor/dashboard' : '/volunteer/dashboard')
+      navigate(authenticated.role === 'donor' ? '/donor/dashboard' : '/volunteer/dashboard')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to log in.')
     } finally {
@@ -53,7 +54,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role, onAuthenticated }) =
         </div>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
           <div><label className="block text-sm font-medium mb-1.5">Phone Number</label><PhoneNumberInput countryCode={countryCode} phoneNumber={phone} onCountryCodeChange={setCountryCode} onPhoneNumberChange={setPhone} /></div>
-          <div><label htmlFor="login-password" className="block text-sm font-medium mb-1.5">Password</label><div className="relative"><LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B756F]" /><input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border border-[#E6EAE7] focus:outline-none focus:border-[#1E824C]" /></div></div>
+          <div><label htmlFor="login-password" className="block text-sm font-medium mb-1.5">Password</label><div className="relative"><LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B756F]" /><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full pl-10 pr-11 py-2.5 text-sm rounded-xl border border-[#E6EAE7] focus:outline-none focus:border-[#1E824C]" /><button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B756F] hover:text-[#29352F] cursor-pointer">{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div></div>
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={isSubmitting} className="w-full py-3 rounded-xl bg-[#29352F] hover:bg-[#1B231F] text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"><LogIn className="w-4 h-4" />{isSubmitting ? 'Logging in…' : 'Login'}</button>
         </form>
