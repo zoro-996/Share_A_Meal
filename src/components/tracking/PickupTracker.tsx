@@ -124,8 +124,8 @@ export const PickupTracker: React.FC<PickupTrackerProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || !donation) return
 
-    const donorLat = donation.collectionAddress.latitude || 12.9784
-    const donorLng = donation.collectionAddress.longitude || 77.6408
+    const donorLat = donation.collectionAddress.latitude || 13.6288
+    const donorLng = donation.collectionAddress.longitude || 79.4192
 
     const volLat = donation.claim?.volunteerCoordinates?.latitude || donorLat + 0.008
     const volLng = donation.claim?.volunteerCoordinates?.longitude || donorLng + 0.009

@@ -172,271 +172,207 @@ async function requireActor(context: EventContext<unknown, string, Record<string
 
 // ─── SEED DATA ───────────────────────────────────────────────────────────────
 
+const SEED_DONATION_IDS = new Set(['don_seed_available', 'don_seed_enroute', 'don_seed_completed'])
+const TIRUPATI = { lat: 13.6288, lng: 79.4192 }
+
 function makeSeedDonations(): Donation[] {
   const now = Date.now()
   return [
     {
-      id: 'don_seed_001',
-      donorId: 'donor_taj_bengaluru',
-      donorName: 'Ramesh Verma (The Spice Terrace)',
+      id: 'don_seed_available',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Ramesh Verma (Sri Venkateswara Kitchen)',
       donorPhone: '9876543210',
       donorType: 'restaurant',
       items: [
         {
           id: 'item_1',
-          name: 'Hyderabadi Veg Biryani',
-          quantity: 12,
+          name: 'Tirupati Veg Meals with Sambar',
+          quantity: 14,
           unit: 'kg',
           foodType: 'veg',
           shelfLifeHours: 5,
           safeUntil: new Date(now + 4 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=80',
         },
         {
           id: 'item_2',
-          name: 'Paneer Butter Masala',
-          quantity: 8,
-          unit: 'litres',
+          name: 'Steamed Idli & Chutney',
+          quantity: 50,
+          unit: 'portions',
           foodType: 'veg',
           shelfLifeHours: 5,
           safeUntil: new Date(now + 4 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=400&q=80',
-        },
-        {
-          id: 'item_3',
-          name: 'Tawa Butter Roti',
-          quantity: 60,
-          unit: 'portions',
-          foodType: 'veg',
-          shelfLifeHours: 6,
-          safeUntil: new Date(now + 5 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
         },
       ],
-      totalQuantityLabel: '12 kg Biryani, 8 L Curry, 60 Rotis',
-      estimatedPeopleServed: 55,
+      totalQuantityLabel: '14 kg meals, 50 idlis',
+      estimatedPeopleServed: 40,
       foodPreparationTime: new Date(now - 2 * 3600_000).toISOString(),
       foodShelfLifeCategory: 'cooked_meals',
       earliestSafeUntil: new Date(now + 4 * 3600_000).toISOString(),
       pickupSchedule: {
         readyType: 'immediate',
-        readyTime: new Date(now - 30 * 60_000).toISOString(),
+        readyTime: new Date(now - 20 * 60_000).toISOString(),
         deadlineTime: new Date(now + 3 * 3600_000).toISOString(),
-        pickupInstructions: 'Enter via rear kitchen ramp. Containers are sealed in insulated foil boxes.',
+        pickupInstructions: 'Ask at the billing desk for surplus packed trays.',
       },
       collectionAddress: {
-        addressLine1: '42, 100 Feet Road, Near Sony Signal',
-        addressLine2: '2nd Floor, Commercial Block',
-        areaLocality: 'Indiranagar',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560038',
-        landmark: 'Opposite Metro Pillar 140',
-        additionalDirections: 'Kitchen dispatch counter on Ground Floor rear.',
-        latitude: 12.9784,
-        longitude: 77.6408,
+        addressLine1: '18, Gandhi Road, Near RTC Complex',
+        areaLocality: 'Tirupati Central',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517501',
+        landmark: 'Opposite APSRTC Bus Station',
+        additionalDirections: 'Ground floor kitchen dispatch, Gandhi Road side.',
+        latitude: TIRUPATI.lat,
+        longitude: TIRUPATI.lng,
       },
-      photos: ['https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80'],
+      photos: [],
       status: 'available',
       createdAt: new Date(now - 3600_000).toISOString(),
       handoverOtp: '482915',
     },
     {
-      id: 'don_seed_002',
-      donorId: 'donor_greenleaf_catering',
-      donorName: 'Ananya Deshmukh (Greenleaf Catering)',
-      donorPhone: '9845012345',
-      donorType: 'function_event',
-      customFoodSource: 'Wedding Banquet Catering',
-      items: [
-        {
-          id: 'item_4',
-          name: 'Veg Pulao with Mixed Vegetables',
-          quantity: 18,
-          unit: 'kg',
-          foodType: 'veg',
-          shelfLifeHours: 5,
-          safeUntil: new Date(now + 3 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=400&q=80',
-        },
-        {
-          id: 'item_5',
-          name: 'Dal Tadka & Steamed Rice',
-          quantity: 15,
-          unit: 'kg',
-          foodType: 'veg',
-          shelfLifeHours: 5,
-          safeUntil: new Date(now + 3 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
-        },
-        {
-          id: 'item_6',
-          name: 'Gulab Jamun Dessert',
-          quantity: 70,
-          unit: 'portions',
-          foodType: 'veg',
-          shelfLifeHours: 24,
-          safeUntil: new Date(now + 20 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?auto=format&fit=crop&w=400&q=80',
-        },
-      ],
-      totalQuantityLabel: '33 kg Rice & Dal, 70 Desserts',
-      estimatedPeopleServed: 80,
-      foodPreparationTime: new Date(now - 3 * 3600_000).toISOString(),
-      foodShelfLifeCategory: 'cooked_meals',
-      earliestSafeUntil: new Date(now + 3 * 3600_000).toISOString(),
-      pickupSchedule: {
-        readyType: 'immediate',
-        readyTime: new Date(now - 45 * 60_000).toISOString(),
-        deadlineTime: new Date(now + 2 * 3600_000).toISOString(),
-        pickupInstructions: 'Banquet service hall loading bay. Large van or cargo bike recommended.',
-      },
-      collectionAddress: {
-        addressLine1: 'Convention Centre Gate 3, 80 Feet Road',
-        areaLocality: 'Koramangala 4th Block',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560034',
-        landmark: 'Near Maharaja Signal',
-        additionalDirections: 'Tell security you are here for surplus food collection.',
-        latitude: 12.9345,
-        longitude: 77.6258,
-      },
-      photos: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80'],
-      status: 'available',
-      createdAt: new Date(now - 2 * 3600_000).toISOString(),
-      handoverOtp: '719342',
-    },
-    {
-      id: 'don_seed_003',
-      donorId: 'donor_artisan_bakery',
-      donorName: 'Sunil Mathur (Crust & Crumb Bakery)',
-      donorPhone: '9731298765',
-      donorType: 'restaurant',
-      customFoodSource: 'Commercial Artisan Bakery',
-      items: [
-        {
-          id: 'item_7',
-          name: 'Whole Wheat Sandwich Loaves',
-          quantity: 25,
-          unit: 'packets',
-          foodType: 'vegan',
-          shelfLifeHours: 36,
-          safeUntil: new Date(now + 28 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
-        },
-        {
-          id: 'item_8',
-          name: 'Veg Puff Pastries',
-          quantity: 35,
-          unit: 'boxes',
-          foodType: 'veg',
-          shelfLifeHours: 12,
-          safeUntil: new Date(now + 10 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=400&q=80',
-        },
-      ],
-      totalQuantityLabel: '25 Loaves, 35 Veg Puffs',
-      estimatedPeopleServed: 40,
-      foodPreparationTime: new Date(now - 5 * 3600_000).toISOString(),
-      foodShelfLifeCategory: 'bakery_bread',
-      earliestSafeUntil: new Date(now + 10 * 3600_000).toISOString(),
-      pickupSchedule: {
-        readyType: 'immediate',
-        readyTime: new Date(now - 10 * 60_000).toISOString(),
-        deadlineTime: new Date(now + 8 * 3600_000).toISOString(),
-        pickupInstructions: 'Store front counter. Everything is packed in food-grade kraft bags.',
-      },
-      collectionAddress: {
-        addressLine1: 'Shop 14, Whitefield Main Road',
-        areaLocality: 'Whitefield',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560066',
-        landmark: 'Next to Forum Mall',
-        latitude: 12.9698,
-        longitude: 77.7499,
-      },
-      photos: ['https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80'],
-      status: 'available',
-      createdAt: new Date(now - 3 * 3600_000).toISOString(),
-      handoverOtp: '364819',
-    },
-    {
-      id: 'don_seed_004',
-      donorId: 'donor_heritage_kitchen',
-      donorName: 'Priya Nambiar (Heritage South Kitchen)',
+      id: 'don_seed_enroute',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Priya Nambiar (Alipiri Annapoorna)',
       donorPhone: '9880054321',
       donorType: 'restaurant',
       items: [
         {
-          id: 'item_9',
-          name: 'Steamed Idli with Sambar & Chutney',
-          quantity: 80,
-          unit: 'portions',
+          id: 'item_3',
+          name: 'Pulihora & Curd Rice Packs',
+          quantity: 20,
+          unit: 'kg',
           foodType: 'veg',
           shelfLifeHours: 5,
-          safeUntil: new Date(now + 4 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
-        },
-        {
-          id: 'item_10',
-          name: 'Medu Vada',
-          quantity: 40,
-          unit: 'portions',
-          foodType: 'veg',
-          shelfLifeHours: 6,
-          safeUntil: new Date(now + 4 * 3600_000).toISOString(),
-          photo: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=400&q=80',
+          safeUntil: new Date(now + 3 * 3600_000).toISOString(),
         },
       ],
-      totalQuantityLabel: '80 Idlis, 40 Vadas with Sambar',
+      totalQuantityLabel: '20 kg rice packs',
       estimatedPeopleServed: 45,
-      foodPreparationTime: new Date(now - 3600_000).toISOString(),
+      foodPreparationTime: new Date(now - 90 * 60_000).toISOString(),
       foodShelfLifeCategory: 'cooked_meals',
-      earliestSafeUntil: new Date(now + 4 * 3600_000).toISOString(),
+      earliestSafeUntil: new Date(now + 3 * 3600_000).toISOString(),
       pickupSchedule: {
         readyType: 'immediate',
-        readyTime: new Date(now - 15 * 60_000).toISOString(),
+        readyTime: new Date(now - 40 * 60_000).toISOString(),
         deadlineTime: new Date(now + 2 * 3600_000).toISOString(),
-        pickupInstructions: 'Front billing desk. Ask for Manager Priya.',
+        pickupInstructions: 'Alipiri Road loading bay. Tell security you are collecting surplus food.',
       },
       collectionAddress: {
-        addressLine1: '18, 5th Cross, 1st Block',
-        areaLocality: 'Jayanagar',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560011',
-        landmark: 'Near Ashoka Pillar',
-        latitude: 12.9382,
-        longitude: 77.5843,
+        addressLine1: 'Alipiri Footpath Road, Near Toll Gate',
+        areaLocality: 'Alipiri',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517501',
+        landmark: 'Alipiri Metro / Footpath starting point',
+        latitude: 13.6532,
+        longitude: 79.4198,
       },
-      photos: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80'],
+      photos: [],
       status: 'en_route',
-      createdAt: new Date(now - 3600_000).toISOString(),
+      createdAt: new Date(now - 2 * 3600_000).toISOString(),
       handoverOtp: '591402',
       claim: {
         claimedAt: new Date(now - 25 * 60_000).toISOString(),
-        volunteerId: 'vol_vikram_01',
+        volunteerId: 'vol_tirupati_demo',
         volunteerName: 'Vikram Sharma',
         volunteerPhone: '9845099887',
-        volunteerVehicle: 'Hero Electric Two-Wheeler (KA-05-EV-1234)',
+        volunteerVehicle: 'Hero Electric Two-Wheeler',
         volunteerRole: 'individual',
         currentStatus: 'en_route',
         statusHistory: [
           {
             status: 'claimed',
             timestamp: new Date(now - 25 * 60_000).toISOString(),
-            note: 'Pickup claimed by Vikram Sharma',
+            note: 'Pickup claimed',
           },
           {
             status: 'en_route',
             timestamp: new Date(now - 10 * 60_000).toISOString(),
-            note: 'Volunteer started journey towards collection point',
+            note: 'Volunteer started towards Alipiri collection point',
           },
         ],
-        volunteerCoordinates: { latitude: 12.942, longitude: 77.589, updatedAt: new Date().toISOString() },
+        volunteerCoordinates: { latitude: 13.6405, longitude: 79.4112, updatedAt: new Date().toISOString() },
         estimatedArrivalMinutes: 8,
+      },
+    },
+    {
+      id: 'don_seed_completed',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Ananya Deshmukh (SV University Catering)',
+      donorPhone: '9845012345',
+      donorType: 'function_event',
+      customFoodSource: 'Campus function catering',
+      items: [
+        {
+          id: 'item_4',
+          name: 'Wedding Veg Biryani Trays',
+          quantity: 18,
+          unit: 'kg',
+          foodType: 'veg',
+          shelfLifeHours: 6,
+          safeUntil: new Date(now - 2 * 3600_000).toISOString(),
+        },
+      ],
+      totalQuantityLabel: '18 kg biryani',
+      estimatedPeopleServed: 50,
+      foodPreparationTime: new Date(now - 8 * 3600_000).toISOString(),
+      foodShelfLifeCategory: 'cooked_meals',
+      earliestSafeUntil: new Date(now - 2 * 3600_000).toISOString(),
+      pickupSchedule: {
+        readyType: 'immediate',
+        readyTime: new Date(now - 6 * 3600_000).toISOString(),
+        deadlineTime: new Date(now - 3 * 3600_000).toISOString(),
+        pickupInstructions: 'Function hall rear gate.',
+      },
+      collectionAddress: {
+        addressLine1: 'Near SV University Main Gate, Balaji Colony',
+        areaLocality: 'SV University',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517502',
+        landmark: 'Opposite University clock tower',
+        latitude: 13.6289,
+        longitude: 79.3988,
+      },
+      photos: [],
+      status: 'completed',
+      createdAt: new Date(now - 10 * 3600_000).toISOString(),
+      handoverOtp: '719342',
+      handoverVerifiedAt: new Date(now - 4 * 3600_000).toISOString(),
+      claim: {
+        claimedAt: new Date(now - 6 * 3600_000).toISOString(),
+        volunteerId: 'vol_tirupati_demo',
+        volunteerName: 'Vikram Sharma',
+        volunteerPhone: '9845099887',
+        volunteerVehicle: 'Hero Electric Two-Wheeler',
+        volunteerRole: 'individual',
+        currentStatus: 'completed',
+        statusHistory: [
+          {
+            status: 'claimed',
+            timestamp: new Date(now - 6 * 3600_000).toISOString(),
+            note: 'Pickup claimed',
+          },
+          {
+            status: 'en_route',
+            timestamp: new Date(now - 5.5 * 3600_000).toISOString(),
+            note: 'Volunteer en route',
+          },
+          {
+            status: 'collected',
+            timestamp: new Date(now - 4 * 3600_000).toISOString(),
+            note: 'Handover OTP verified',
+          },
+          {
+            status: 'completed',
+            timestamp: new Date(now - 3 * 3600_000).toISOString(),
+            note: 'Distributed to beneficiaries in Tirupati',
+          },
+        ],
+        volunteerCoordinates: { latitude: 13.6289, longitude: 79.3988, updatedAt: new Date(now - 3 * 3600_000).toISOString() },
+        estimatedArrivalMinutes: 0,
       },
     },
   ]
@@ -455,10 +391,10 @@ function ensureInitialized() {
       {
         id: 'notif_seed_1',
         recipientRole: 'donor',
-        recipientId: 'donor_heritage_kitchen',
-        donationId: 'don_seed_004',
+        recipientId: 'donor_tirupati_demo',
+        donationId: 'don_seed_enroute',
         title: 'Volunteer En Route!',
-        message: 'Vikram Sharma has claimed your donation and is en route. Handover OTP: 591402',
+        message: 'A volunteer has claimed your Alipiri surplus listing and is on the way. Handover OTP: 591402',
         type: 'handover_otp',
         createdAt: new Date(Date.now() - 24 * 60_000).toISOString(),
         read: false,
@@ -470,35 +406,34 @@ function ensureInitialized() {
 }
 const donorProfiles = new Map<string, DonorProfile>([
   [
-    'donor_taj_bengaluru',
+    'donor_tirupati_demo',
     {
-      id: 'donor_taj_bengaluru',
+      id: 'donor_tirupati_demo',
       name: 'Ramesh Verma',
       phone: '9876543210',
       donorType: 'restaurant',
       collectionAddress: {
-        addressLine1: '42, 100 Feet Road, Near Sony Signal',
-        addressLine2: '2nd Floor, Commercial Block',
-        areaLocality: 'Indiranagar',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560038',
-        landmark: 'Opposite Metro Pillar 140',
-        additionalDirections: 'Kitchen dispatch counter on Ground Floor rear.',
-        latitude: 12.9784,
-        longitude: 77.6408,
+        addressLine1: '18, Gandhi Road, Near RTC Complex',
+        areaLocality: 'Tirupati Central',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517501',
+        landmark: 'Opposite APSRTC Bus Station',
+        additionalDirections: 'Ground floor kitchen dispatch, Gandhi Road side.',
+        latitude: TIRUPATI.lat,
+        longitude: TIRUPATI.lng,
       },
     },
   ],
 ])
 const volunteerProfiles = new Map<string, VolunteerProfile>([
   [
-    'vol_vikram_01',
+    'vol_tirupati_demo',
     {
-      id: 'vol_vikram_01',
+      id: 'vol_tirupati_demo',
       name: 'Vikram Sharma',
       phone: '9845099887',
-      vehicle: 'Hero Electric Two-Wheeler (KA-05-EV-1234)',
+      vehicle: 'Hero Electric Two-Wheeler',
       role: 'individual',
     },
   ],
@@ -514,6 +449,71 @@ function json(data: unknown, status = 200): Response {
       'Access-Control-Allow-Origin': '*',
     },
   })
+}
+
+function attachDemoListings(
+  list: Donation[],
+  role: string | undefined,
+  userId: string | undefined,
+  displayName?: string,
+  displayPhone?: string
+): Donation[] {
+  if (!userId) return list
+  if (role === 'donor') {
+    return list
+      .filter((d) => SEED_DONATION_IDS.has(d.id) || d.donorId === userId)
+      .map((d) =>
+        SEED_DONATION_IDS.has(d.id)
+          ? {
+              ...d,
+              donorId: userId,
+              donorName: displayName || d.donorName,
+              donorPhone: displayPhone || d.donorPhone,
+            }
+          : d
+      )
+  }
+  if (role === 'volunteer') {
+    return list.map((donation) => {
+      const withOwner =
+        SEED_DONATION_IDS.has(donation.id) && donation.claim
+          ? {
+              ...donation,
+              claim: {
+                ...donation.claim,
+                volunteerId: userId,
+                volunteerName: displayName || donation.claim.volunteerName,
+                volunteerPhone: displayPhone || donation.claim.volunteerPhone,
+              },
+            }
+          : donation
+      return maskForVolunteer(withOwner, userId)
+    })
+  }
+  return list
+}
+
+function presentDonation(
+  donation: Donation,
+  role: string | undefined,
+  userId: string | undefined,
+  displayName?: string,
+  displayPhone?: string
+): Donation {
+  return attachDemoListings([donation], role, userId, displayName, displayPhone)[0] || donation
+}
+
+function volunteerOwnsClaim(donation: Donation, volunteerId: string): boolean {
+  if (!donation.claim) return false
+  if (donation.claim.volunteerId === volunteerId) return true
+  return SEED_DONATION_IDS.has(donation.id)
+}
+
+function assignSeedClaimToVolunteer(donation: Donation, volunteerId: string, volunteerName?: string, volunteerPhone?: string) {
+  if (!donation.claim || !SEED_DONATION_IDS.has(donation.id)) return
+  donation.claim.volunteerId = volunteerId
+  if (volunteerName) donation.claim.volunteerName = volunteerName
+  if (volunteerPhone) donation.claim.volunteerPhone = volunteerPhone
 }
 
 function maskForVolunteer(donation: Donation, volunteerId?: string): Donation {
@@ -554,7 +554,7 @@ export const onRequest: PagesFunction = async (context) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     })
   }
@@ -601,7 +601,7 @@ export const onRequest: PagesFunction = async (context) => {
     const roleParam = url.searchParams.get('role') as 'donor' | 'volunteer' | null
     const userIdParam = url.searchParams.get('userId')
     const role = roleParam || (path.includes('volunteer') ? 'volunteer' : 'donor')
-    const userId = userIdParam || (role === 'donor' ? 'donor_taj_bengaluru' : 'vol_vikram_01')
+    const userId = userIdParam || (role === 'donor' ? 'donor_tirupati_demo' : 'vol_tirupati_demo')
     actor = { id: userId, role }
   }
 
@@ -627,7 +627,13 @@ export const onRequest: PagesFunction = async (context) => {
       return json({ success: false, error: 'Please enter a valid mobile number.' }, 400)
     }
     const fullPhone = `${countryCode}${phoneNumber}`
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
+    const windowTime = Math.floor(Date.now() / (10 * 60 * 1000))
+    let hash = 0
+    const str = `${fullPhone}_${windowTime}_sam_otp_salt`
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+    }
+    const code = (100000 + (Math.abs(hash) % 900000)).toString()
     const verificationId = `otp_ver_${Date.now()}_${Math.floor(Math.random() * 10000)}`
     otpStore.set(fullPhone, {
       code,
@@ -651,8 +657,23 @@ export const onRequest: PagesFunction = async (context) => {
     const fullPhone = `${countryCode}${phoneNumber}`
     const stored = otpStore.get(fullPhone)
 
-    // Allow universal testing code 123456 or exact generated code
-    const isApproved = inputCode === '123456' || (stored && stored.code === inputCode && stored.expiresAt > Date.now())
+    const windowTime = Math.floor(Date.now() / (10 * 60 * 1000))
+    let h0 = 0
+    const s0 = `${fullPhone}_${windowTime}_sam_otp_salt`
+    for (let i = 0; i < s0.length; i++) h0 = ((h0 << 5) - h0 + s0.charCodeAt(i)) | 0
+    const expected0 = (100000 + (Math.abs(h0) % 900000)).toString()
+
+    let h1 = 0
+    const s1 = `${fullPhone}_${windowTime - 1}_sam_otp_salt`
+    for (let i = 0; i < s1.length; i++) h1 = ((h1 << 5) - h1 + s1.charCodeAt(i)) | 0
+    const expectedPrev = (100000 + (Math.abs(h1) % 900000)).toString()
+
+    // Allow universal testing code 123456, exact generated code, or deterministic window codes
+    const isApproved =
+      inputCode === '123456' ||
+      (stored && stored.code === inputCode && stored.expiresAt > Date.now()) ||
+      inputCode === expected0 ||
+      inputCode === expectedPrev
 
     if (!isApproved) {
       return json({
@@ -703,9 +724,9 @@ export const onRequest: PagesFunction = async (context) => {
           (d.collectionAddress.city || '').toLowerCase().includes(loc)
       )
     }
-    if (role === 'volunteer') {
-      list = list.map((d) => maskForVolunteer(d, userId))
-    }
+    const displayName = url.searchParams.get('displayName') || undefined
+    const displayPhone = url.searchParams.get('displayPhone') || undefined
+    list = attachDemoListings(list, role, userId, displayName, displayPhone)
     return json({ success: true, donations: list })
   }
 
@@ -812,7 +833,9 @@ export const onRequest: PagesFunction = async (context) => {
       const userId = url.searchParams.get('userId') || undefined
       const donation = donations.find((d) => d.id === donationId)
       if (!donation) return json({ success: false, error: 'Donation not found.' }, 404)
-      const result = role === 'volunteer' ? maskForVolunteer(donation, userId) : donation
+      const displayName = url.searchParams.get('displayName') || undefined
+      const displayPhone = url.searchParams.get('displayPhone') || undefined
+      const result = presentDonation(donation, role, userId, displayName, displayPhone)
       return json({ success: true, donation: result })
     }
 
@@ -840,8 +863,8 @@ export const onRequest: PagesFunction = async (context) => {
         currentStatus: 'claimed',
         statusHistory: [{ status: 'claimed', timestamp: now, note: `Claimed by ${volunteerName}`, updatedBy: volunteerName }],
         volunteerCoordinates: {
-          latitude: (donation.collectionAddress.latitude || 12.9716) + (Math.random() - 0.5) * 0.02,
-          longitude: (donation.collectionAddress.longitude || 77.5946) + (Math.random() - 0.5) * 0.02,
+          latitude: (donation.collectionAddress.latitude || TIRUPATI.lat) + (Math.random() - 0.5) * 0.02,
+          longitude: (donation.collectionAddress.longitude || TIRUPATI.lng) + (Math.random() - 0.5) * 0.02,
           updatedAt: now,
         },
         estimatedArrivalMinutes: 15,
@@ -870,9 +893,10 @@ export const onRequest: PagesFunction = async (context) => {
         coordinates?: { latitude: number; longitude: number }; estimatedArrivalMinutes?: number
       }
       if (!status || !volunteerId) return json({ success: false, error: 'status and volunteerId are required.' }, 400)
-      if (donation.claim.volunteerId !== volunteerId) {
+      if (!volunteerOwnsClaim(donation, volunteerId)) {
         return json({ success: false, error: 'Unauthorized: not the assigned volunteer.' }, 403)
       }
+      assignSeedClaimToVolunteer(donation, volunteerId)
       if (status === 'collected' && !donation.handoverVerifiedAt) {
         return json({ success: false, error: 'Handover OTP must be verified before marking food as collected.' }, 400)
       }
@@ -891,7 +915,8 @@ export const onRequest: PagesFunction = async (context) => {
       if (!donation || !donation.claim) return json({ success: false, error: 'Donation or active claim not found.' }, 404)
       const { code, volunteerId } = body as { code: string; volunteerId: string }
       if (!code || !volunteerId) return json({ success: false, error: 'code and volunteerId are required.' }, 400)
-      if (donation.claim.volunteerId !== volunteerId) return json({ success: false, error: 'Unauthorized.' }, 403)
+      if (!volunteerOwnsClaim(donation, volunteerId)) return json({ success: false, error: 'Unauthorized.' }, 403)
+      assignSeedClaimToVolunteer(donation, volunteerId)
       if (code !== donation.handoverOtp) return json({ success: false, error: 'Incorrect Handover OTP. Please check with the donor.' }, 400)
       const now = new Date().toISOString()
       donation.status = 'collected'
@@ -930,7 +955,8 @@ export const onRequest: PagesFunction = async (context) => {
       if (!donation || !donation.claim) return json({ success: false, error: 'Donation or assigned claim not found.' }, 404)
       const { volunteerId, coordinates } = body as { volunteerId: string; coordinates: { latitude: number; longitude: number } }
       if (!volunteerId || !coordinates) return json({ success: false, error: 'volunteerId and coordinates are required.' }, 400)
-      if (donation.claim.volunteerId !== volunteerId) return json({ success: false, error: 'Unauthorized: volunteer does not match claim.' }, 403)
+      if (!volunteerOwnsClaim(donation, volunteerId)) return json({ success: false, error: 'Unauthorized: volunteer does not match claim.' }, 403)
+      assignSeedClaimToVolunteer(donation, volunteerId)
       donation.claim.volunteerCoordinates = { ...coordinates, updatedAt: new Date().toISOString() }
       donation.claim.isBroadcastingGps = true
       return json({ success: true, donation })
@@ -940,7 +966,7 @@ export const onRequest: PagesFunction = async (context) => {
   // ── Profile routes ──────────────────────────────────────────────────────
   if (path === '/api/profile/donor') {
     if (req.method === 'GET') {
-      const id = url.searchParams.get('id') || 'donor_taj_bengaluru'
+      const id = url.searchParams.get('id') || 'donor_tirupati_demo'
       const profile = donorProfiles.get(id) || null
       return json({ success: true, profile })
     }
@@ -961,7 +987,7 @@ export const onRequest: PagesFunction = async (context) => {
 
   if (path === '/api/profile/volunteer') {
     if (req.method === 'GET') {
-      const id = url.searchParams.get('id') || 'vol_vikram_01'
+      const id = url.searchParams.get('id') || 'vol_tirupati_demo'
       const profile = volunteerProfiles.get(id) || null
       return json({ success: true, profile })
     }

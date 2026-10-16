@@ -71,12 +71,12 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
           })
         },
         () => {
-          setUserLocation({ latitude: 12.9716, longitude: 77.5946 })
+          setUserLocation({ latitude: 13.6288, longitude: 79.4192 })
         },
         { timeout: 8000 }
       )
     } else {
-      setUserLocation({ latitude: 12.9716, longitude: 77.5946 })
+      setUserLocation({ latitude: 13.6288, longitude: 79.4192 })
     }
   }, [])
 
@@ -319,7 +319,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter by locality or food item (e.g. Indiranagar, Biryani)..."
+                  placeholder="Filter by locality or food item (e.g. Tirupati, Idli)..."
                   className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-[#E6EAE7] bg-white text-[#29352F] placeholder-[#6B756F]/60 focus:outline-none focus:border-[#29352F]"
                 />
               </div>

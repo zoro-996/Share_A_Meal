@@ -1,3 +1,14 @@
+function getDeterministicOtp(phone: string, windowOffset = 0): string {
+  const windowTime = Math.floor(Date.now() / (10 * 60 * 1000)) + windowOffset
+  let hash = 0
+  const str = `${phone}_${windowTime}_sam_otp_salt`
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+  }
+  const positive = Math.abs(hash)
+  return (100000 + (positive % 900000)).toString()
+}
+
 // Cloudflare Pages Function: /api/otp/verify
 export const onRequestPost: PagesFunction<{
   SMS_PROVIDER?: string
@@ -39,7 +50,14 @@ export const onRequestPost: PagesFunction<{
     const otpStore = (globalThis as any).__activeOtpStore as Map<string, { code: string; expiresAt: number; verificationId: string }>
     const stored = otpStore.get(fullPhone)
 
-    let isApproved = inputCode === '123456' || (stored !== undefined && stored.code === inputCode)
+    const currentExpected = getDeterministicOtp(fullPhone, 0)
+    const prevExpected = getDeterministicOtp(fullPhone, -1)
+
+    let isApproved =
+      inputCode === '123456' ||
+      (stored !== undefined && stored.code === inputCode) ||
+      inputCode === currentExpected ||
+      inputCode === prevExpected
 
     // If not immediately approved by edge store, check Twilio if configured
     const accountSid = context.env.SMS_ACCOUNT_SID

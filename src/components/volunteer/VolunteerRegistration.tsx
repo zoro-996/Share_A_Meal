@@ -197,8 +197,8 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
             state: state.trim(),
             pincode: pincode.trim(),
             landmark: landmark.trim(),
-            latitude: 12.9716,
-            longitude: 77.5946,
+            latitude: 13.6288,
+            longitude: 79.4192,
           },
         },
       }
@@ -588,7 +588,7 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Bengaluru"
+                    placeholder="e.g. Tirupati"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#9A3412]"
                     required
                   />
@@ -599,7 +599,7 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
                     type="text"
                     value={state}
                     onChange={(e) => setState(e.target.value)}
-                    placeholder="e.g. Karnataka"
+                    placeholder="e.g. Andhra Pradesh"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#9A3412]"
                     required
                   />
@@ -611,7 +611,7 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
                     maxLength={6}
                     value={pincode}
                     onChange={(e) => setPincode(e.target.value)}
-                    placeholder="e.g. 560038"
+                    placeholder="e.g. 517501"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6EAE7] bg-white text-sm text-[#29352F] focus:outline-none focus:border-[#9A3412]"
                     required
                   />
