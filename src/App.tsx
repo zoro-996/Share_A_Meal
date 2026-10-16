@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { HeroSection } from './components/HeroSection'
+import { Header } from './components/Header'
+import { HowItWorksSection } from './components/landing/HowItWorksSection'
+import { HumanImpactSection } from './components/landing/HumanImpactSection'
+import { FooterSection } from './components/landing/FooterSection'
 import { NavigationProvider } from './context/NavigationContext'
 import { useNavigation } from './context/useNavigation'
 import { VolunteerRegistration } from './components/volunteer/VolunteerRegistration'
@@ -13,8 +17,6 @@ import { LoginPage } from './components/common/LoginPage'
 import { clearCurrentSession, getActiveRole, saveCurrentDonor, saveCurrentVolunteer, setActiveRole } from './services/donationService'
 import { getAuthenticatedProfile, hasLocalAuthenticatedSession } from './services/authService'
 import { supabase } from './services/supabaseClient'
-
-const CURRENT_YEAR = 2026
 
 type PortalRole = 'donor' | 'volunteer'
 
@@ -31,6 +33,7 @@ function AppContent() {
   const [authRole, setAuthRole] = useState<PortalRole | null>(getActiveRole() || localPreviewRole)
   const [isRestoringSession, setIsRestoringSession] = useState(true)
   const [newlyCreatedDonation, setNewlyCreatedDonation] = useState<{ id: string; otp: string } | null>(null)
+  const [isSignInOpen, setIsSignInOpen] = useState(false)
 
   const restoreAuthenticatedProfile = async () => {
     const authenticated = await getAuthenticatedProfile()
@@ -114,7 +117,30 @@ function AppContent() {
 
   if (currentPath !== '/' && currentPath !== '') return <NotFound onHomeClick={() => navigate('/')} />
 
-  return <div className="min-h-screen flex flex-col bg-white text-neutral-800"><HeroSection onActionClick={handleActionClick} onLoginClick={(role) => navigate(`/login/${role}`)} /><footer className="py-3.5 bg-[#F2F9F5] text-center text-[11px] text-[#5A6760]/80"><p>&copy; {CURRENT_YEAR} Share a Meal. Connecting surplus food with care.</p></footer></div>
+  return (
+    <div className="min-h-screen bg-[#FFFCF6] text-[#173529] selection:bg-[#EAF5ED] selection:text-[#123B2A]">
+      <Header onSignInClick={() => setIsSignInOpen(true)} />
+      <main>
+        <HeroSection onActionClick={handleActionClick} />
+        <HowItWorksSection />
+        <HumanImpactSection onActionClick={handleActionClick} />
+        <FooterSection onActionClick={handleActionClick} />
+      </main>
+      {isSignInOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#0B281D]/35 p-4 backdrop-blur-sm" onClick={() => setIsSignInOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-[#DFE9E0] bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <h2 className="font-heading text-lg font-black text-[#123B2A]">Sign In to Share a Meal</h2>
+            <p className="mt-1 text-sm text-[#64756B]">Choose the portal for your account.</p>
+            <div className="mt-5 grid gap-3">
+              <button type="button" onClick={() => navigate('/login/donor')} className="rounded-xl bg-[#EAF5ED] p-4 text-left font-bold text-[#123B2A] transition-colors hover:bg-[#d9efdf]">Food Donor Portal</button>
+              <button type="button" onClick={() => navigate('/login/volunteer')} className="rounded-xl bg-[#FFF0E4] p-4 text-left font-bold text-[#123B2A] transition-colors hover:bg-[#ffe4cc]">Volunteer & NGO Portal</button>
+            </div>
+            <button type="button" onClick={() => setIsSignInOpen(false)} className="mt-5 text-sm font-bold text-[#64756B] hover:text-[#123B2A]">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function App() { return <NavigationProvider><AppContent /></NavigationProvider> }
