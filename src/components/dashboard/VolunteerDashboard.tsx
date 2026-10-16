@@ -114,17 +114,21 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
 
   // Partition donations
   const availableDonations = donations.filter((d) => d.status === 'available')
+  const isMyDemoRun = (donation: Donation) =>
+    donation.claim?.volunteerId === volunteer.id || donation.claim?.volunteerId === 'volunteer_tirupati_demo'
+  const directionsUrl = (donation: Donation) =>
+    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+      `${donation.collectionAddress.addressLine1}, ${donation.collectionAddress.areaLocality}, ${donation.collectionAddress.city}, ${donation.collectionAddress.state} ${donation.collectionAddress.pincode}`
+    )}`
   const myClaimedRuns = donations.filter(
     (d) =>
-      d.claim?.volunteerId === volunteer.id &&
+      isMyDemoRun(d) &&
       (d.status === 'claimed' ||
         d.status === 'en_route' ||
         d.status === 'arrived' ||
         d.status === 'collected')
   )
-  const myCompletedRuns = donations.filter(
-    (d) => d.claim?.volunteerId === volunteer.id && d.status === 'completed'
-  )
+  const myCompletedRuns = donations.filter((d) => isMyDemoRun(d) && d.status === 'completed')
   const peopleDistributed = myCompletedRuns.reduce((total, donation) => total + (donation.estimatedPeopleServed || 0), 0)
 
   // Filtered available donations by locality or food item
@@ -211,13 +215,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
 
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <a
-                href={
-                  myClaimedRuns[0].collectionAddress.latitude && myClaimedRuns[0].collectionAddress.longitude
-                    ? `https://www.google.com/maps/dir/?api=1&destination=${myClaimedRuns[0].collectionAddress.latitude},${myClaimedRuns[0].collectionAddress.longitude}`
-                    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                        `${myClaimedRuns[0].collectionAddress.addressLine1}, ${myClaimedRuns[0].collectionAddress.areaLocality}, ${myClaimedRuns[0].collectionAddress.city}`
-                      )}`
-                }
+                href={directionsUrl(myClaimedRuns[0])}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#29352F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
@@ -545,13 +543,7 @@ export const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ onOpenTr
 
                       <div className="flex items-center gap-2">
                         <a
-                          href={
-                            donation.collectionAddress.latitude && donation.collectionAddress.longitude
-                              ? `https://www.google.com/maps/dir/?api=1&destination=${donation.collectionAddress.latitude},${donation.collectionAddress.longitude}`
-                              : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                                  `${donation.collectionAddress.addressLine1}, ${donation.collectionAddress.areaLocality}, ${donation.collectionAddress.city}`
-                                )}`
-                          }
+                          href={directionsUrl(donation)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#29352F] bg-white border border-[#E6EAE7] hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"

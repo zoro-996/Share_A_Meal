@@ -447,65 +447,26 @@ function makeSeedDonations(): Donation[] {
 /** The only initial listings shown in the test environment. */
 function makeTirupatiTestDonations(): Donation[] {
   const now = Date.now()
-  const donor = {
-    id: 'donor_tirupati_test',
-    name: 'Tirupati Food Donor',
-    phone: '9000000000',
-    type: 'household',
+  const donor = { id: 'donor_tirupati_demo', name: 'Tirupati Community Donor', phone: '123456789', type: 'household' as const }
+  const volunteerId = 'volunteer_tirupati_demo'
+  const volunteer = { id: volunteerId, name: 'Community Volunteer', phone: '987654321', vehicle: 'Two-Wheeler' }
+  const address = (addressLine1: string, areaLocality: string, landmark: string, pincode: string, latitude: number, longitude: number): CollectionAddress => ({ addressLine1, areaLocality, landmark, pincode, latitude, longitude, city: 'Tirupati', state: 'Andhra Pradesh' })
+  const claim = (status: DonationStatus, minutesAgo: number): DonationClaim => {
+    const claimedAt = new Date(now - minutesAgo * 60_000).toISOString()
+    return { claimedAt, volunteerId, volunteerName: volunteer.name, volunteerPhone: volunteer.phone, volunteerVehicle: volunteer.vehicle, volunteerRole: 'individual', currentStatus: status, statusHistory: [{ status: 'claimed', timestamp: claimedAt, note: 'Pickup accepted by volunteer', updatedBy: volunteer.name }, { status, timestamp: new Date(now - Math.max(5, minutesAgo - 10) * 60_000).toISOString(), note: status === 'completed' ? 'Food delivered to beneficiaries.' : 'Volunteer is travelling to the pickup address.', updatedBy: volunteer.name }], volunteerCoordinates: { latitude: 13.632, longitude: 79.415, updatedAt: new Date(now - 5 * 60_000).toISOString() }, isBroadcastingGps: status === 'en_route', estimatedArrivalMinutes: status === 'en_route' ? 12 : 0 }
   }
-  const locations: Array<{
-    id: string; food: string; quantity: number; addressLine1: string; areaLocality: string
-    landmark: string; pincode: string; latitude: number; longitude: number
-  }> = [
-    { id: 'tirupati_hpo', food: 'Fresh Vegetarian Meals', quantity: 30, addressLine1: '13-3-344, Head Post Office Street', areaLocality: 'Tata Nagar', landmark: 'Tirupati Head Post Office', pincode: '517501', latitude: 13.6288, longitude: 79.4192 },
-    { id: 'tirupati_korlagunta', food: 'Rice and Vegetable Curry', quantity: 35, addressLine1: '949A, Korlagunta Main Road', areaLocality: 'Ashok Nagar, Korlagunta', landmark: 'Korlagunta Post Office', pincode: '517501', latitude: 13.6355, longitude: 79.4281 },
-    { id: 'tirupati_svu', food: 'Packed Lunch Boxes', quantity: 40, addressLine1: 'Sri Venkateswara University Road', areaLocality: 'SV University Campus Area', landmark: 'SV University 3rd Gate', pincode: '517502', latitude: 13.6286, longitude: 79.3983 },
-    { id: 'tirupati_kapila', food: 'Breakfast Packets', quantity: 30, addressLine1: 'Kapila Theertham Road', areaLocality: 'Srinivasa Nagar, Varadaraja Nagar', landmark: 'Tirupati North Post Office', pincode: '517507', latitude: 13.6477, longitude: 79.4122 },
-  ]
+  const create = (id: string, items: FoodItem[], location: CollectionAddress, status: DonationStatus, minutesAgo: number, people: number, handoverOtp: string, donationClaim?: DonationClaim): Donation => {
+    const createdAt = new Date(now - minutesAgo * 60_000).toISOString()
+    const deadlineTime = new Date(now + (status === 'available' ? 3 : 1) * 60 * 60_000).toISOString()
+    return { id, donorId: donor.id, donorName: donor.name, donorPhone: donor.phone, donorType: donor.type, items, totalQuantityLabel: items.map((item) => `${item.quantity} ${item.unit} ${item.name}`).join(', '), estimatedPeopleServed: people, foodPreparationTime: createdAt, foodCategory: 'prepared_meals', foodCategories: ['prepared_meals'], foodShelfLifeCategory: 'cooked_meals', earliestSafeUntil: deadlineTime, pickupSchedule: { readyType: 'immediate', readyTime: createdAt, deadlineTime, pickupInstructions: `Collect near ${location.landmark}.` }, collectionAddress: location, photos: [], status, createdAt, handoverOtp, claim: donationClaim, handoverVerifiedAt: status === 'completed' ? new Date(now - 25 * 60_000).toISOString() : undefined }
+  }
+  const item = (id: string, name: string, quantity: number, unit: FoodItem['unit']): FoodItem => ({ id, name, quantity, unit, foodType: 'veg', shelfLifeHours: 6, safeUntil: new Date(now + 3 * 60 * 60_000).toISOString() })
 
-  return locations.map((location, index) => {
-    const readyAt = new Date(now - (index + 1) * 15 * 60_000).toISOString()
-    const deadlineAt = new Date(now + (3 + index) * 60 * 60_000).toISOString()
-    const item: FoodItem = {
-      id: `item_${location.id}`,
-      name: location.food,
-      quantity: location.quantity,
-      unit: 'portions',
-      foodType: 'veg',
-      shelfLifeHours: 6,
-      safeUntil: deadlineAt,
-    }
-    return {
-      id: `don_${location.id}`,
-      donorId: donor.id,
-      donorName: donor.name,
-      donorPhone: donor.phone,
-      donorType: donor.type,
-      items: [item],
-      totalQuantityLabel: `${location.quantity} portions ${location.food}`,
-      estimatedPeopleServed: location.quantity,
-      foodPreparationTime: readyAt,
-      foodCategory: 'prepared_meals',
-      foodCategories: ['prepared_meals'],
-      foodShelfLifeCategory: 'cooked_meals',
-      earliestSafeUntil: deadlineAt,
-      pickupSchedule: { readyType: 'immediate', readyTime: readyAt, deadlineTime: deadlineAt, pickupInstructions: 'Please collect from the stated landmark.' },
-      collectionAddress: {
-        addressLine1: location.addressLine1,
-        areaLocality: location.areaLocality,
-        city: 'Tirupati',
-        state: 'Andhra Pradesh',
-        pincode: location.pincode,
-        landmark: location.landmark,
-        latitude: location.latitude,
-        longitude: location.longitude,
-      },
-      photos: [],
-      status: 'available',
-      createdAt: readyAt,
-      handoverOtp: String(100000 + index),
-    }
-  })
+  return [
+    create('don_tirupati_available', [item('chapati', 'Fresh Chapati', 20, 'portions'), item('curry', 'Mixed Vegetable Curry', 5, 'litres'), item('sweets', 'Sweet Boxes', 2, 'boxes')], address('13-3-344, Head Post Office Street', 'Tata Nagar', 'Tirupati Head Post Office', '517501', 13.6288, 79.4192), 'available', 20, 25, '123401'),
+    create('don_tirupati_claimed', [item('biryani', 'Vegetable Biryani', 9, 'portions'), item('icecream', 'Ice Cream Boxes', 2, 'boxes')], address('949A, Korlagunta Main Road', 'Ashok Nagar, Korlagunta', 'Korlagunta Post Office', '517501', 13.6355, 79.4281), 'en_route', 45, 11, '123402', claim('en_route', 30)),
+    create('don_tirupati_completed', [item('pulao', 'Vegetable Pulao', 18, 'portions'), item('dal', 'Dal Curry', 4, 'litres'), item('dessert', 'Dessert Boxes', 2, 'boxes')], address('Sri Venkateswara University Road', 'SV University Campus Area', 'SV University 3rd Gate', '517502', 13.6286, 79.3983), 'completed', 180, 22, '123403', claim('completed', 150)),
+  ]
 }
 
 let donations: Donation[] = []
@@ -568,7 +529,8 @@ function json(data: unknown, status = 200): Response {
 }
 
 function maskForVolunteer(donation: Donation, volunteerId?: string): Donation {
-  const isClaimer = donation.claim && volunteerId && donation.claim.volunteerId === volunteerId
+  const isDemoClaim = donation.claim?.volunteerId === 'volunteer_tirupati_demo'
+  const isClaimer = donation.claim && volunteerId && (donation.claim.volunteerId === volunteerId || isDemoClaim)
   if (isClaimer) return donation
   return {
     ...donation,
