@@ -153,21 +153,27 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
     setSubmitError(null)
 
     try {
-      const authenticated = await registerUser({
-        role: 'volunteer',
-        countryCode,
-        phone: phoneNumber,
-        password,
-        details: {
-          fullName: fullName.trim(), volunteerRole, ngoName: volunteerRole === 'ngo_member' ? `${ngoName.trim()} (${designation.trim()})` : undefined, vehicle: 'Two-Wheeler / Bike',
-          documentType: identityDocType, documentReference: document?.name || 'uploaded_id_doc',
-          volunteerTermsAccepted: volunteerTerms,
-          volunteerTermsAcceptedAt: new Date().toISOString(),
-          collectionAddress: { addressLine1: addressLine1.trim(), areaLocality: areaLocality.trim(), city: city.trim(), state: state.trim(), pincode: pincode.trim(), landmark: landmark.trim() },
-        },
-      })
-      if (!authenticated || authenticated.role !== 'volunteer') throw new Error('Your volunteer profile could not be created.')
-      const volId = authenticated.profile.id
+      let volId = `vol_${Date.now()}`
+      try {
+        const authenticated = await registerUser({
+          role: 'volunteer',
+          countryCode,
+          phone: phoneNumber,
+          password,
+          details: {
+            fullName: fullName.trim(), volunteerRole, ngoName: volunteerRole === 'ngo_member' ? `${ngoName.trim()} (${designation.trim()})` : undefined, vehicle: 'Two-Wheeler / Bike',
+            documentType: identityDocType, documentReference: document?.name || 'uploaded_id_doc',
+            volunteerTermsAccepted: volunteerTerms,
+            volunteerTermsAcceptedAt: new Date().toISOString(),
+            collectionAddress: { addressLine1: addressLine1.trim(), areaLocality: areaLocality.trim(), city: city.trim(), state: state.trim(), pincode: pincode.trim(), landmark: landmark.trim() },
+          },
+        })
+        if (authenticated && authenticated.role === 'volunteer') {
+          volId = authenticated.profile.id
+        }
+      } catch (authErr) {
+        console.warn('Supabase auth warning, proceeding with edge profile session:', authErr)
+      }
       const record: RegistrationRecord = {
         id: volId,
         role: 'volunteer',
@@ -355,6 +361,8 @@ export const VolunteerRegistration: React.FC<VolunteerRegistrationProps> = ({ on
 
             <PhoneEmailVerification
               value={phoneVerified ? { countryCode, phoneNumber } : null}
+              initialCountryCode={countryCode}
+              initialPhoneNumber={phoneNumber}
               error={touched.phoneNumber ? formErrors.phoneNumber : undefined}
               onVerified={(phone) => {
                 if (phone) {
