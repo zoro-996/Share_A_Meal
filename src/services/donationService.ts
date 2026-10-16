@@ -20,30 +20,29 @@ async function apiHeaders(): Promise<HeadersInit> {
 }
 
 const DEFAULT_DONOR_PROFILE: DonorUserProfile = {
-  id: 'donor_taj_bengaluru',
+  id: 'donor_tirupati_demo',
   name: 'Ramesh Verma',
   phone: '9876543210',
   donorType: 'restaurant',
   isVerified: true,
   collectionAddress: {
-    addressLine1: '42, 100 Feet Road, Near Sony Signal',
-    addressLine2: '2nd Floor, Commercial Block',
-    areaLocality: 'Indiranagar',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560038',
-    landmark: 'Opposite Metro Pillar 140',
-    additionalDirections: 'Kitchen dispatch counter on Ground Floor rear.',
-    latitude: 12.9784,
-    longitude: 77.6408,
+    addressLine1: '18, Gandhi Road, Near RTC Complex',
+    areaLocality: 'Tirupati Central',
+    city: 'Tirupati',
+    state: 'Andhra Pradesh',
+    pincode: '517501',
+    landmark: 'Opposite APSRTC Bus Station',
+    additionalDirections: 'Ground floor kitchen dispatch, Gandhi Road side.',
+    latitude: 13.6288,
+    longitude: 79.4192,
   },
 }
 
 const DEFAULT_VOLUNTEER_PROFILE: VolunteerUserProfile = {
-  id: 'vol_vikram_01',
+  id: 'vol_tirupati_demo',
   name: 'Vikram Sharma',
   phone: '9845099887',
-  vehicle: 'Hero Electric Two-Wheeler (KA-05-EV-1234)',
+  vehicle: 'Hero Electric Two-Wheeler',
   role: 'individual',
 }
 
@@ -229,6 +228,15 @@ export async function fetchDonations(params?: {
   if (params?.userId) query.set('userId', params.userId)
   if (params?.status) query.set('status', params.status)
   if (params?.locality) query.set('locality', params.locality)
+  if (params?.role === 'donor') {
+    const donor = getCurrentDonor()
+    query.set('displayName', donor.name)
+    query.set('displayPhone', donor.phone)
+  } else if (params?.role === 'volunteer') {
+    const volunteer = getCurrentVolunteer()
+    query.set('displayName', volunteer.name)
+    query.set('displayPhone', volunteer.phone)
+  }
 
   const res = await fetch(`/api/donations?${query.toString()}`, { headers: await apiHeaders() })
   if (!res.ok) {
@@ -246,6 +254,15 @@ export async function fetchDonationById(
   const query = new URLSearchParams()
   if (role) query.set('role', role)
   if (userId) query.set('userId', userId)
+  if (role === 'donor') {
+    const donor = getCurrentDonor()
+    query.set('displayName', donor.name)
+    query.set('displayPhone', donor.phone)
+  } else if (role === 'volunteer') {
+    const volunteer = getCurrentVolunteer()
+    query.set('displayName', volunteer.name)
+    query.set('displayPhone', volunteer.phone)
+  }
 
   const res = await fetch(`/api/donations/${encodeURIComponent(id)}?${query.toString()}`, { headers: await apiHeaders() })
   if (!res.ok) {

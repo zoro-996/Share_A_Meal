@@ -12,9 +12,8 @@ interface CollectionLocationMapProps {
   state?: string
 }
 
-// Default center: Central India (New Delhi 28.6139, 77.2090)
-const DEFAULT_LAT = 28.6139
-const DEFAULT_LNG = 77.2090
+const DEFAULT_LAT = 13.6288
+const DEFAULT_LNG = 79.4192
 
 export const CollectionLocationMap: React.FC<CollectionLocationMapProps> = ({
   latitude,

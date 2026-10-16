@@ -10,285 +10,221 @@ import type {
   VolunteerUserProfile,
 } from '../src/types/registration.ts'
 
-// Realistic Seed Data in Bengaluru for immediate testing and pairing
-const initialSeedDonations: Donation[] = [
-  {
-    id: 'don_seed_001',
-    donorId: 'donor_taj_bengaluru',
-    donorName: 'Ramesh Verma (The Spice Terrace)',
-    donorPhone: '9876543210',
-    donorType: 'restaurant',
-    items: [
-      {
-        id: 'item_1',
-        name: 'Hyderabadi Veg Biryani',
-        quantity: 12,
-        unit: 'kg',
-        foodType: 'veg',
-        shelfLifeHours: 5,
-        safeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_2',
-        name: 'Paneer Butter Masala',
-        quantity: 8,
-        unit: 'litres',
-        foodType: 'veg',
-        shelfLifeHours: 5,
-        safeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_3',
-        name: 'Tawa Butter Roti',
-        quantity: 60,
-        unit: 'portions',
-        foodType: 'veg',
-        shelfLifeHours: 6,
-        safeUntil: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
-      },
-    ],
-    totalQuantityLabel: '12 kg Biryani, 8 L Curry, 60 Rotis',
-    estimatedPeopleServed: 55,
-    foodPreparationTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // Prepared 2h ago
-    foodShelfLifeCategory: 'cooked_meals',
-    earliestSafeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // Safe for 4h more
-    pickupSchedule: {
-      readyType: 'immediate',
-      readyTime: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      deadlineTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-      pickupInstructions: 'Enter via rear kitchen ramp. Containers are sealed in insulated foil boxes.',
-    },
-    collectionAddress: {
-      addressLine1: '42, 100 Feet Road, Near Sony Signal',
-      addressLine2: '2nd Floor, Commercial Block',
-      areaLocality: 'Indiranagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560038',
-      landmark: 'Opposite Metro Pillar 140',
-      additionalDirections: 'Kitchen dispatch counter on Ground Floor rear.',
-      latitude: 12.9784,
-      longitude: 77.6408,
-    },
-    photos: [
-      'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
-    ],
-    status: 'available',
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    handoverOtp: '482915',
-  },
-  {
-    id: 'don_seed_002',
-    donorId: 'donor_greenleaf_catering',
-    donorName: 'Ananya Deshmukh (Greenleaf Catering)',
-    donorPhone: '9845012345',
-    donorType: 'function_event',
-    customFoodSource: 'Wedding Banquet Catering',
-    items: [
-      {
-        id: 'item_4',
-        name: 'Veg Pulao with Mixed Vegetables',
-        quantity: 18,
-        unit: 'kg',
-        foodType: 'veg',
-        shelfLifeHours: 5,
-        safeUntil: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_5',
-        name: 'Dal Tadka & Steamed Rice',
-        quantity: 15,
-        unit: 'kg',
-        foodType: 'veg',
-        shelfLifeHours: 5,
-        safeUntil: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_6',
-        name: 'Gulab Jamun Dessert',
-        quantity: 70,
-        unit: 'portions',
-        foodType: 'veg',
-        shelfLifeHours: 24,
-        safeUntil: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?auto=format&fit=crop&w=400&q=80',
-      },
-    ],
-    totalQuantityLabel: '33 kg Rice & Dal, 70 Desserts',
-    estimatedPeopleServed: 80,
-    foodPreparationTime: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    foodShelfLifeCategory: 'cooked_meals',
-    earliestSafeUntil: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    pickupSchedule: {
-      readyType: 'immediate',
-      readyTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      deadlineTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-      pickupInstructions: 'Banquet service hall loading bay. Large van or cargo bike recommended.',
-    },
-    collectionAddress: {
-      addressLine1: 'Convention Centre Gate 3, 80 Feet Road',
-      areaLocality: 'Koramangala 4th Block',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560034',
-      landmark: 'Near Maharaja Signal',
-      additionalDirections: 'Tell security you are here for surplus food collection.',
-      latitude: 12.9345,
-      longitude: 77.6258,
-    },
-    photos: [
-      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
-    ],
-    status: 'available',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    handoverOtp: '719342',
-  },
-  {
-    id: 'don_seed_003',
-    donorId: 'donor_artisan_bakery',
-    donorName: 'Sunil Mathur (Crust & Crumb Bakery)',
-    donorPhone: '9731298765',
-    donorType: 'restaurant',
-    customFoodSource: 'Commercial Artisan Bakery',
-    items: [
-      {
-        id: 'item_7',
-        name: 'Whole Wheat Sandwich Loaves',
-        quantity: 25,
-        unit: 'packets',
-        foodType: 'vegan',
-        shelfLifeHours: 36,
-        safeUntil: new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_8',
-        name: 'Veg Puff Pastries',
-        quantity: 35,
-        unit: 'boxes',
-        foodType: 'veg',
-        shelfLifeHours: 12,
-        safeUntil: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=400&q=80',
-      },
-    ],
-    totalQuantityLabel: '25 Loaves, 35 Veg Puffs',
-    estimatedPeopleServed: 40,
-    foodPreparationTime: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    foodShelfLifeCategory: 'bakery_bread',
-    earliestSafeUntil: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(),
-    pickupSchedule: {
-      readyType: 'immediate',
-      readyTime: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-      deadlineTime: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-      pickupInstructions: 'Store front counter. Everything is packed in food-grade kraft bags.',
-    },
-    collectionAddress: {
-      addressLine1: 'Shop 14, Whitefield Main Road',
-      areaLocality: 'Whitefield',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560066',
-      landmark: 'Next to Forum Mall',
-      latitude: 12.9698,
-      longitude: 77.7499,
-    },
-    photos: [
-      'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
-    ],
-    status: 'available',
-    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    handoverOtp: '364819',
-  },
-  {
-    id: 'don_seed_004',
-    donorId: 'donor_heritage_kitchen',
-    donorName: 'Priya Nambiar (Heritage South Kitchen)',
-    donorPhone: '9880054321',
-    donorType: 'restaurant',
-    items: [
-      {
-        id: 'item_9',
-        name: 'Steamed Idli with Sambar & Chutney',
-        quantity: 80,
-        unit: 'portions',
-        foodType: 'veg',
-        shelfLifeHours: 5,
-        safeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
-      },
-      {
-        id: 'item_10',
-        name: 'Medu Vada',
-        quantity: 40,
-        unit: 'portions',
-        foodType: 'veg',
-        shelfLifeHours: 6,
-        safeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        photo: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=400&q=80',
-      },
-    ],
-    totalQuantityLabel: '80 Idlis, 40 Vadas with Sambar',
-    estimatedPeopleServed: 45,
-    foodPreparationTime: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    foodShelfLifeCategory: 'cooked_meals',
-    earliestSafeUntil: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-    pickupSchedule: {
-      readyType: 'immediate',
-      readyTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      deadlineTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-      pickupInstructions: 'Front billing desk. Ask for Manager Priya.',
-    },
-    collectionAddress: {
-      addressLine1: '18, 5th Cross, 1st Block',
-      areaLocality: 'Jayanagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560011',
-      landmark: 'Near Ashoka Pillar',
-      latitude: 12.9382,
-      longitude: 77.5843,
-    },
-    photos: [
-      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80',
-    ],
-    status: 'en_route',
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    handoverOtp: '591402',
-    claim: {
-      claimedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-      volunteerId: 'vol_vikram_01',
-      volunteerName: 'Vikram Sharma',
-      volunteerPhone: '9845099887',
-      volunteerVehicle: 'Hero Electric Two-Wheeler (KA-05-EV-1234)',
-      volunteerRole: 'individual',
-      currentStatus: 'en_route',
-      statusHistory: [
+export const SEED_DONATION_IDS = new Set(['don_seed_available', 'don_seed_enroute', 'don_seed_completed'])
+const TIRUPATI = { lat: 13.6288, lng: 79.4192 }
+
+function makeSeedDonations(): Donation[] {
+  const now = Date.now()
+  return [
+    {
+      id: 'don_seed_available',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Ramesh Verma (Sri Venkateswara Kitchen)',
+      donorPhone: '9876543210',
+      donorType: 'restaurant',
+      items: [
         {
-          status: 'claimed',
-          timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-          note: 'Pickup claimed by Vikram Sharma',
+          id: 'item_1',
+          name: 'Tirupati Veg Meals with Sambar',
+          quantity: 14,
+          unit: 'kg',
+          foodType: 'veg',
+          shelfLifeHours: 5,
+          safeUntil: new Date(now + 4 * 3600_000).toISOString(),
+          photo: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=80',
         },
         {
-          status: 'en_route',
-          timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-          note: 'Volunteer started journey towards collection point',
+          id: 'item_2',
+          name: 'Steamed Idli & Chutney',
+          quantity: 50,
+          unit: 'portions',
+          foodType: 'veg',
+          shelfLifeHours: 5,
+          safeUntil: new Date(now + 4 * 3600_000).toISOString(),
+          photo: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
         },
       ],
-      volunteerCoordinates: {
-        latitude: 12.942,
-        longitude: 77.589,
-        updatedAt: new Date().toISOString(),
+      totalQuantityLabel: '14 kg meals, 50 idlis',
+      estimatedPeopleServed: 40,
+      foodPreparationTime: new Date(now - 2 * 3600_000).toISOString(),
+      foodShelfLifeCategory: 'cooked_meals',
+      earliestSafeUntil: new Date(now + 4 * 3600_000).toISOString(),
+      pickupSchedule: {
+        readyType: 'immediate',
+        readyTime: new Date(now - 20 * 60_000).toISOString(),
+        deadlineTime: new Date(now + 3 * 3600_000).toISOString(),
+        pickupInstructions: 'Ask at the billing desk for surplus packed trays.',
       },
-      estimatedArrivalMinutes: 8,
+      collectionAddress: {
+        addressLine1: '18, Gandhi Road, Near RTC Complex',
+        areaLocality: 'Tirupati Central',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517501',
+        landmark: 'Opposite APSRTC Bus Station',
+        additionalDirections: 'Ground floor kitchen dispatch, Gandhi Road side.',
+        latitude: TIRUPATI.lat,
+        longitude: TIRUPATI.lng,
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+      ],
+      status: 'available',
+      createdAt: new Date(now - 3600_000).toISOString(),
+      handoverOtp: '482915',
     },
-  },
-]
+    {
+      id: 'don_seed_enroute',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Priya Nambiar (Alipiri Annapoorna)',
+      donorPhone: '9880054321',
+      donorType: 'restaurant',
+      items: [
+        {
+          id: 'item_3',
+          name: 'Pulihora & Curd Rice Packs',
+          quantity: 20,
+          unit: 'kg',
+          foodType: 'veg',
+          shelfLifeHours: 5,
+          safeUntil: new Date(now + 3 * 3600_000).toISOString(),
+          photo: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
+        },
+      ],
+      totalQuantityLabel: '20 kg rice packs',
+      estimatedPeopleServed: 45,
+      foodPreparationTime: new Date(now - 90 * 60_000).toISOString(),
+      foodShelfLifeCategory: 'cooked_meals',
+      earliestSafeUntil: new Date(now + 3 * 3600_000).toISOString(),
+      pickupSchedule: {
+        readyType: 'immediate',
+        readyTime: new Date(now - 40 * 60_000).toISOString(),
+        deadlineTime: new Date(now + 2 * 3600_000).toISOString(),
+        pickupInstructions: 'Alipiri Road loading bay. Tell security you are collecting surplus food.',
+      },
+      collectionAddress: {
+        addressLine1: 'Alipiri Footpath Road, Near Toll Gate',
+        areaLocality: 'Alipiri',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517501',
+        landmark: 'Alipiri Metro / Footpath starting point',
+        latitude: 13.6532,
+        longitude: 79.4198,
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+      ],
+      status: 'en_route',
+      createdAt: new Date(now - 2 * 3600_000).toISOString(),
+      handoverOtp: '591402',
+      claim: {
+        claimedAt: new Date(now - 25 * 60_000).toISOString(),
+        volunteerId: 'vol_tirupati_demo',
+        volunteerName: 'Vikram Sharma',
+        volunteerPhone: '9845099887',
+        volunteerVehicle: 'Hero Electric Two-Wheeler',
+        volunteerRole: 'individual',
+        currentStatus: 'en_route',
+        statusHistory: [
+          {
+            status: 'claimed',
+            timestamp: new Date(now - 25 * 60_000).toISOString(),
+            note: 'Pickup claimed',
+          },
+          {
+            status: 'en_route',
+            timestamp: new Date(now - 10 * 60_000).toISOString(),
+            note: 'Volunteer started towards Alipiri collection point',
+          },
+        ],
+        volunteerCoordinates: { latitude: 13.6405, longitude: 79.4112, updatedAt: new Date().toISOString() },
+        estimatedArrivalMinutes: 8,
+      },
+    },
+    {
+      id: 'don_seed_completed',
+      donorId: 'donor_tirupati_demo',
+      donorName: 'Ananya Deshmukh (SV University Catering)',
+      donorPhone: '9845012345',
+      donorType: 'function_event',
+      customFoodSource: 'Campus function catering',
+      items: [
+        {
+          id: 'item_4',
+          name: 'Wedding Veg Biryani Trays',
+          quantity: 18,
+          unit: 'kg',
+          foodType: 'veg',
+          shelfLifeHours: 6,
+          safeUntil: new Date(now - 2 * 3600_000).toISOString(),
+          photo: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=80',
+        },
+      ],
+      totalQuantityLabel: '18 kg biryani',
+      estimatedPeopleServed: 50,
+      foodPreparationTime: new Date(now - 8 * 3600_000).toISOString(),
+      foodShelfLifeCategory: 'cooked_meals',
+      earliestSafeUntil: new Date(now - 2 * 3600_000).toISOString(),
+      pickupSchedule: {
+        readyType: 'immediate',
+        readyTime: new Date(now - 6 * 3600_000).toISOString(),
+        deadlineTime: new Date(now - 3 * 3600_000).toISOString(),
+        pickupInstructions: 'Function hall rear gate.',
+      },
+      collectionAddress: {
+        addressLine1: 'Near SV University Main Gate, Balaji Colony',
+        areaLocality: 'SV University',
+        city: 'Tirupati',
+        state: 'Andhra Pradesh',
+        pincode: '517502',
+        landmark: 'Opposite University clock tower',
+        latitude: 13.6289,
+        longitude: 79.3988,
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+      ],
+      status: 'completed',
+      createdAt: new Date(now - 10 * 3600_000).toISOString(),
+      handoverOtp: '719342',
+      handoverVerifiedAt: new Date(now - 4 * 3600_000).toISOString(),
+      claim: {
+        claimedAt: new Date(now - 6 * 3600_000).toISOString(),
+        volunteerId: 'vol_tirupati_demo',
+        volunteerName: 'Vikram Sharma',
+        volunteerPhone: '9845099887',
+        volunteerVehicle: 'Hero Electric Two-Wheeler',
+        volunteerRole: 'individual',
+        currentStatus: 'completed',
+        statusHistory: [
+          {
+            status: 'claimed',
+            timestamp: new Date(now - 6 * 3600_000).toISOString(),
+            note: 'Pickup claimed',
+          },
+          {
+            status: 'en_route',
+            timestamp: new Date(now - 5.5 * 3600_000).toISOString(),
+            note: 'En route',
+          },
+          {
+            status: 'collected',
+            timestamp: new Date(now - 5 * 3600_000).toISOString(),
+            note: 'Handover verified with OTP',
+          },
+          {
+            status: 'completed',
+            timestamp: new Date(now - 4 * 3600_000).toISOString(),
+            note: 'Distributed to community near SV University',
+          },
+        ],
+      },
+    },
+  ]
+}
+
+const initialSeedDonations: Donation[] = makeSeedDonations()
 
 class DonationStore {
   private donations: Donation[] = [...initialSeedDonations]
@@ -329,6 +265,30 @@ class DonationStore {
       )
     }
 
+    // Role-based attachment of demo seed listings
+    if (options?.role === 'donor') {
+      list = list
+        .filter((d) => SEED_DONATION_IDS.has(d.id) || !options.userId || d.donorId === options.userId)
+        .map((d) =>
+          SEED_DONATION_IDS.has(d.id) && options.userId
+            ? { ...d, donorId: options.userId }
+            : d
+        )
+    } else if (options?.role === 'volunteer') {
+      list = list.map((d) => {
+        if (SEED_DONATION_IDS.has(d.id) && d.claim && options.userId) {
+          return {
+            ...d,
+            claim: {
+              ...d.claim,
+              volunteerId: options.userId,
+            },
+          }
+        }
+        return d
+      })
+    }
+
     // Role-based filtering and privacy masking
     return list.map((item) => {
       // If requested by a volunteer and donation is NOT claimed by this volunteer:
@@ -367,8 +327,16 @@ class DonationStore {
     role?: 'donor' | 'volunteer' | 'admin',
     userId?: string
   ): Donation | null {
-    const donation = this.donations.find((d) => d.id === id)
+    let donation = this.donations.find((d) => d.id === id)
     if (!donation) return null
+
+    if (SEED_DONATION_IDS.has(donation.id)) {
+      if (role === 'donor' && userId) {
+        donation = { ...donation, donorId: userId }
+      } else if (role === 'volunteer' && userId && donation.claim) {
+        donation = { ...donation, claim: { ...donation.claim, volunteerId: userId } }
+      }
+    }
 
     const isClaimedByRequester =
       role === 'volunteer' &&

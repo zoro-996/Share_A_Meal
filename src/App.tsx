@@ -11,7 +11,7 @@ import { PickupTracker } from './components/tracking/PickupTracker'
 import { NotFound } from './components/common/NotFound'
 import { LoginPage } from './components/common/LoginPage'
 import { clearCurrentSession, getActiveRole, saveCurrentDonor, saveCurrentVolunteer, setActiveRole } from './services/donationService'
-import { getAuthenticatedProfile } from './services/authService'
+import { getAuthenticatedProfile, hasLocalAuthenticatedSession } from './services/authService'
 import { supabase } from './services/supabaseClient'
 
 const CURRENT_YEAR = 2026
@@ -58,7 +58,7 @@ function AppContent() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && !localPreviewRole) {
+      if (!session && !localPreviewRole && !hasLocalAuthenticatedSession()) {
         clearCurrentSession()
         setAuthRole(null)
       }
