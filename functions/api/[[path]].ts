@@ -463,9 +463,9 @@ function makeTirupatiTestDonations(): Donation[] {
   const item = (id: string, name: string, quantity: number, unit: FoodItem['unit']): FoodItem => ({ id, name, quantity, unit, foodType: 'veg', shelfLifeHours: 6, safeUntil: new Date(now + 3 * 60 * 60_000).toISOString() })
 
   return [
-    create('don_tirupati_available', [item('chapati', 'Fresh Chapati', 20, 'portions'), item('curry', 'Mixed Vegetable Curry', 5, 'litres'), item('sweets', 'Sweet Boxes', 2, 'boxes')], address('13-3-344, Head Post Office Street', 'Tata Nagar', 'Tirupati Head Post Office', '517501', 13.6288, 79.4192), 'available', 20, 25, '123401'),
+    create('don_tirupati_available', [item('chapati', 'Fresh Chapati', 20, 'portions'), item('curry', 'Mixed Vegetable Curry', 5, 'litres'), item('sweets', 'Sweet Boxes', 2, 'boxes')], address('13-3-344, Head Post Office Street', 'Tata Nagar', 'Tirupati Head Post Office', '517501', 13.6288, 79.4192), 'available', 20, 25, '123402'),
     create('don_tirupati_claimed', [item('biryani', 'Vegetable Biryani', 9, 'portions'), item('icecream', 'Ice Cream Boxes', 2, 'boxes')], address('949A, Korlagunta Main Road', 'Ashok Nagar, Korlagunta', 'Korlagunta Post Office', '517501', 13.6355, 79.4281), 'en_route', 45, 11, '123402', claim('en_route', 30)),
-    create('don_tirupati_completed', [item('pulao', 'Vegetable Pulao', 18, 'portions'), item('dal', 'Dal Curry', 4, 'litres'), item('dessert', 'Dessert Boxes', 2, 'boxes')], address('Sri Venkateswara University Road', 'SV University Campus Area', 'SV University 3rd Gate', '517502', 13.6286, 79.3983), 'completed', 180, 22, '123403', claim('completed', 150)),
+    create('don_tirupati_completed', [item('pulao', 'Vegetable Pulao', 18, 'portions'), item('dal', 'Dal Curry', 4, 'litres'), item('dessert', 'Dessert Boxes', 2, 'boxes')], address('Sri Venkateswara University Road', 'SV University Campus Area', 'SV University 3rd Gate', '517502', 13.6286, 79.3983), 'completed', 180, 22, '123402', claim('completed', 150)),
   ]
 }
 
