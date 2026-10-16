@@ -559,11 +559,32 @@ export const onRequest: PagesFunction = async (context) => {
     })
   }
 
-  // Skip — let specific function files handle their own routes
-  if (
-    path.startsWith('/api/geocode/')
-  ) {
-    return context.next()
+  // ── GET /api/geocode/reverse ───────────────────────────────────────────
+  if (path === '/api/geocode/reverse' && req.method === 'GET') {
+    const lat = url.searchParams.get('lat')
+    const lon = url.searchParams.get('lon')
+    if (!lat || !lon) {
+      return json({ error: 'lat and lon parameters are required.' }, 400)
+    }
+    try {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+        lat
+      )}&lon=${encodeURIComponent(lon)}&addressdetails=1`
+      const res = await fetch(nominatimUrl, {
+        headers: {
+          'User-Agent': 'ShareAMealApp/1.0 (contact@shareameal.local)',
+          'Accept': 'application/json',
+          'Accept-Language': 'en',
+        },
+      })
+      if (!res.ok) {
+        return json({ error: 'Reverse geocode service returned error.' }, res.status)
+      }
+      const data = await res.json()
+      return json(data)
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : 'Reverse geocode failed.' }, 500)
+    }
   }
 
   // ── In-Memory OTP Store for Edge Verification ──────────────────────────
